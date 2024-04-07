@@ -11,14 +11,27 @@ To represent the network and its dependencies, the following JSON structures are
 Each machine in the network is represented as a node with associated attributes. The node structure includes details such as the machine's identifier, type, and any relevant properties.
 
 ```json
+
+// Server
 {
   "id": "machine1",
   "type": "server",
   "properties": {
     "ip_address": "192.168.1.1",
+    "hostname": "bingus.local",
     "os": "Linux",
-    "services": ["LDAP", "HTTP"]
+    "dependencies": ["LDAP", "HTTP"]
   }
+}
+
+// Dependency
+{
+    "id": "LDAP_1",
+    "parent": "machine1",
+    "type": "LDAP",
+    "properties": {
+       "dependants": ["192.168.1.2"],
+    }
 }
 ```
 

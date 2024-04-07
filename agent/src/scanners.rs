@@ -1,2 +1,6 @@
 pub mod ldap;
-pub mod database;
+
+/// Path: connections.rs
+/// This module contains logic for parsing and enumerating network connections
+/// and their associated processes.
+pub mod connections;
