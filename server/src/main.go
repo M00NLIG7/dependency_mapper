@@ -29,6 +29,8 @@ func main() {
 		c.HTML(http.StatusOK, "map", gin.H{})
 	})
 
+	router.GET("/edgecheck", controllers.EdgeCheckEndpoint)
+
 	router.POST("/addnode", controllers.AddNode)
 
 	router.Run()
