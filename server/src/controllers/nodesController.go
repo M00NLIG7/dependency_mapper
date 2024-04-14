@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var AdjacencyMatrix map[string][]string
+var AdjacencyMatrix map[uint][]uint
 
 func EdgeCheck() {
 	var allNodes []models.Node
@@ -28,19 +28,34 @@ func EdgeCheck() {
 		if AdjacencyMatrix == nil {
 			// intialize map
 			zap.S().Info("Initializing map...")
-			AdjacencyMatrix = make(map[string][]string)
+			AdjacencyMatrix = make(map[uint][]uint)
 		}
 
-		// check if key exists
-		_, ok := AdjacencyMatrix[node.LocalIp]
-		if !ok {
-			zap.S().Infof("%s does not exist", node.LocalIp)
-			AdjacencyMatrix[node.LocalIp] = []string{}
+		// check if local address already exists in map
+		addressExists := false
+		for k, _ := range AdjacencyMatrix {
+			for _, x := range allNodes {
+				if x.ID == k {
+					storedLocalAddress := x.LocalIp
+					if node.LocalIp == storedLocalAddress {
+						addressExists = true
+						break
+					}
+				}
+			}
+
 		}
+
+		if !addressExists {
+			zap.S().Infof("%s does not exist", node.LocalIp)
+			AdjacencyMatrix[node.ID] = []uint{}
+		}
+
 		// Check if the destination IP already exists in the specifed key value
 		counter := 0
 		if node.RemoteIp != "0.0.0.0" {
-			for _, RemoteIp := range AdjacencyMatrix[node.LocalIp] {
+			for _, RemoteID := range AdjacencyMatrix[node.ID] {
+				RemoteIp := allNodes[RemoteID].RemoteIp
 				if RemoteIp == node.RemoteIp {
 					zap.S().Infof("%s destination ID already loaded", RemoteIp)
 					counter++
@@ -52,7 +67,7 @@ func EdgeCheck() {
 
 		if counter == 0 {
 			// Add dest ip to EdgeMap slice
-			AdjacencyMatrix[node.LocalIp] = append(AdjacencyMatrix[node.LocalIp], node.RemoteIp)
+			AdjacencyMatrix[node.ID] = append(AdjacencyMatrix[node.ID], node.ID)
 		}
 	}
 }
