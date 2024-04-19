@@ -12,7 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
-var AdjacencyMatrix map[uint][]uint
+type mappedNode struct {
+	ID uint
+	IP string
+}
+
+var AdjacencyMatrix map[mappedNode][]mappedNode
 
 func EdgeCheck() {
 	var allNodes []models.Node
@@ -28,48 +33,52 @@ func EdgeCheck() {
 		if AdjacencyMatrix == nil {
 			// intialize map
 			zap.S().Info("Initializing map...")
-			AdjacencyMatrix = make(map[uint][]uint)
+			AdjacencyMatrix = make(map[mappedNode][]mappedNode)
 		}
 
-		// check if local address already exists in map
-		addressExists := false
-		for k, _ := range AdjacencyMatrix {
-			for _, x := range allNodes {
-				if x.ID == k {
-					storedLocalAddress := x.LocalIp
-					if node.LocalIp == storedLocalAddress {
-						addressExists = true
-						break
-					}
-				}
+		// check if key exists
+		currentNode := mappedNode{
+			ID: node.ID,
+			IP: node.LocalIp,
+		}
+
+		var currentMappedValue []mappedNode
+		var currentMappedKey mappedNode
+		for k, v := range AdjacencyMatrix {
+			if k.IP == currentNode.IP {
+				currentMappedKey = k
+				currentMappedValue = v
 			}
-
 		}
 
-		if !addressExists {
-			zap.S().Infof("%s does not exist", node.LocalIp)
-			AdjacencyMatrix[node.ID] = []uint{}
+		if currentMappedValue == nil {
+			zap.S().Infof("%s does not exist", currentNode)
+			AdjacencyMatrix[currentNode] = []mappedNode{}
+			currentMappedKey = currentNode
 		}
 
-		// Check if the destination IP already exists in the specifed key value
-		counter := 0
 		if node.RemoteIp != "0.0.0.0" {
-			for _, RemoteID := range AdjacencyMatrix[node.ID] {
-				RemoteIp := allNodes[RemoteID].RemoteIp
-				if RemoteIp == node.RemoteIp {
-					zap.S().Infof("%s destination ID already loaded", RemoteIp)
+			var counter uint
+			for _, item := range currentMappedValue {
+				if item.IP == node.RemoteIp {
 					counter++
 				}
 			}
-		} else {
-			counter++
+
+			if counter == 0 {
+				// Add dest ip to EdgeMap slice
+				newItem := mappedNode{
+					ID: node.ID,
+					IP: node.RemoteIp,
+				}
+
+				AdjacencyMatrix[currentMappedKey] = append(AdjacencyMatrix[currentMappedKey], newItem)
+			}
+
 		}
 
-		if counter == 0 {
-			// Add dest ip to EdgeMap slice
-			AdjacencyMatrix[node.ID] = append(AdjacencyMatrix[node.ID], node.ID)
-		}
 	}
+
 }
 
 func EdgeCheckEndpoint(c *gin.Context) {
