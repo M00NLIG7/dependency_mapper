@@ -9,11 +9,12 @@ type Node struct {
 	ID          uint `gorm:"primaryKey"`
 	NodeType    string
 	Module      string
-	DestPort    int
-	DestIp      string
-	SrcPort     int
-	SrcIp       string
+	LocalPort   int
+	LocalIp     string
+	RemotePort  int
+	RemoteIp    string
 	Description string
+	Signature   string
 }
 
 // Database model
