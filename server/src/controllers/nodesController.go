@@ -72,3 +72,11 @@ func AddNode(c *gin.Context) {
 // 	SrcIp:       "192.168.60.22",
 // 	Description: "This is test data!",
 // }
+
+// Key: Source ip: Value: (ip, destIP)
+
+// Do a db query to group nodes by source ip
+// Create a map of source ip to node id
+// Iterate over the map and create edges between the nodes
+
+
