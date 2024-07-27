@@ -10,13 +10,13 @@ import (
 )
 
 func InitLogger() {
-	//createLogDirectory()
-	//writerSync := getLogWriter()
+	createLogDirectory()
+	writerSync := getLogWriter()
 	encoder := getEncoder()
 
 	core := zapcore.NewTee(
-		//zapcore.NewCore(encoder, writerSync, zapcore.DebugLevel),
-		zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel),
+		zapcore.NewCore(encoder, writerSync, zapcore.DebugLevel),
+		//zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel),
 	)
 	logg := zap.New(core, zap.AddCaller())
 

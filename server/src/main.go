@@ -3,7 +3,9 @@ package main
 import (
 	"depedency-mapper-server/controllers"
 	"depedency-mapper-server/initializers"
+	"encoding/json"
 	"net/http"
+    "fmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,9 +31,36 @@ func main() {
 		c.HTML(http.StatusOK, "map", gin.H{})
 	})
 
-	router.GET("/edgecheck", controllers.EdgeCheckEndpoint)
+	router.POST("/addnode", controllers.HandleDependency)
 
-	router.POST("/addnode", controllers.AddNode)
+	router.GET("/map", func(c *gin.Context) {
+		networkGraph, err := controllers.FetchGraph()
+
+        if err != nil {
+            fmt.Println(err)
+        }
+
+		// Convert graph to JSON Convert map to json string
+		jsonStr, err := json.Marshal(networkGraph)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		c.HTML(http.StatusOK, "map", gin.H{"graph": string(jsonStr)})
+	})
+
+	// SSE endpoint: Maybe TODO?
+	/*
+		router.GET("/events", func(c *gin.Context) {
+			c.Stream(func(w io.Writer) bool {
+				values := controllers.FetchGraph()
+
+				c.SSEvent("update", values)
+				time.Sleep(10 * time.Second) // Adjust the interval as needed
+				return true
+			})
+		})
+	*/
 
 	router.Run()
 }
