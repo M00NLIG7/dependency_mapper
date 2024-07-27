@@ -6,87 +6,12 @@ import (
 	"depedency-mapper-server/models"
 	"encoding/hex"
 	"net/http"
-	"strconv"
 
+	"strconv"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-type mappedNode struct {
-	ID uint
-	IP string
-}
-
-var AdjacencyMatrix map[mappedNode][]mappedNode
-
-func EdgeCheck() {
-	var allNodes []models.Node
-	uniqueNodesResult := initializers.DB.Find(&allNodes)
-	zap.S().Infof("There are %v records: %v", uniqueNodesResult.RowsAffected, allNodes)
-
-	if uniqueNodesResult.Error != nil {
-		zap.S().Error("Error: ", uniqueNodesResult.Error)
-		return
-	}
-
-	for _, node := range allNodes {
-		if AdjacencyMatrix == nil {
-			// intialize map
-			zap.S().Info("Initializing map...")
-			AdjacencyMatrix = make(map[mappedNode][]mappedNode)
-		}
-
-		// check if key exists
-		currentNode := mappedNode{
-			ID: node.ID,
-			IP: node.LocalIp,
-		}
-
-		var currentMappedValue []mappedNode
-		var currentMappedKey mappedNode
-		for k, v := range AdjacencyMatrix {
-			if k.IP == currentNode.IP {
-				currentMappedKey = k
-				currentMappedValue = v
-			}
-		}
-
-		if currentMappedValue == nil {
-			zap.S().Infof("%s does not exist", currentNode)
-			AdjacencyMatrix[currentNode] = []mappedNode{}
-			currentMappedKey = currentNode
-		}
-
-		if node.RemoteIp != "0.0.0.0" {
-			var counter uint
-			for _, item := range currentMappedValue {
-				if item.IP == node.RemoteIp {
-					counter++
-				}
-			}
-
-			if counter == 0 {
-				// Add dest ip to EdgeMap slice
-				newItem := mappedNode{
-					ID: node.ID,
-					IP: node.RemoteIp,
-				}
-
-				AdjacencyMatrix[currentMappedKey] = append(AdjacencyMatrix[currentMappedKey], newItem)
-			}
-
-		}
-
-	}
-
-}
-
-func EdgeCheckEndpoint(c *gin.Context) {
-	EdgeCheck()
-	zap.S().Infof("Current edge structure: %v", AdjacencyMatrix)
-}
-
-func generateNodeSignature(node models.Node) string {
+func generateNodeSignature(node models.Dependency) string {
 	data := node.LocalIp + strconv.Itoa(node.LocalPort) + node.RemoteIp + strconv.Itoa(node.RemotePort) + node.Module + node.NodeType
 	h := sha256.New()
 	h.Write([]byte(data))
@@ -97,68 +22,62 @@ func generateNodeSignature(node models.Node) string {
 	return hashString
 }
 
-func AddNode(c *gin.Context) {
-	var newNode models.Node
-	if err := c.BindJSON(&newNode); err != nil {
-		zap.S().Info("Error binding JSON data")
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+func HandleDependency(c *gin.Context) {
+	var dep models.Dependency
+
+    // Validate the input data
+	if err := c.ShouldBindJSON(&dep); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
 		return
 	}
 
-	// Create signature for new node
-	newNodeSig := generateNodeSignature(newNode)
-	// Assign new signature to the new node struct
-	newNode.Signature = newNodeSig
-
-	var allNodes []models.Node
-	nodesResult := initializers.DB.Find(&allNodes)
-
-	if nodesResult.Error != nil {
-		zap.S().Error("Error: ", nodesResult.Error)
-		c.JSON(http.StatusBadRequest, gin.H{"error": nodesResult.Error})
+	// Add the dependency to the database
+	if err := initializers.DB.Create(&dep).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add dependency"})
 		return
 	}
 
-	for _, dbNode := range allNodes {
-		if dbNode.Signature == newNodeSig {
-			zap.S().Error("Node already exists!")
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Node already exists"})
-			return
-		}
-	}
-
-	result := initializers.DB.Create(&newNode)
-
-	if result.Error != nil {
-		zap.S().Info("Error adding new data to DB")
-		c.JSON(http.StatusBadRequest, gin.H{"error": result.Error})
+	// Add or get the local node
+	localNode, err := models.AddNode(initializers.DB, dep.LocalIp)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add node"})
 		return
 	}
 
-	EdgeCheck()
+	// Add edge between local node and remote IP
+	_, err = models.AddEdge(initializers.DB, localNode.ID, dep.RemoteIp)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add edge"})
+		return
+	}
 
-	// List some debugging stats
-	zap.S().Infof("Rows affected: %v", result.RowsAffected)
-	zap.S().Infof("Current edge structure: %v", AdjacencyMatrix)
-	c.JSON(http.StatusOK, gin.H{"message": "DB updated!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Node added successfully"})
 }
 
-// Test data
+func FetchGraph() (map[string][]string, error) {
+    var nodes []models.Node
+    if err := initializers.DB.Find(&nodes).Error; err != nil {
+        return nil, err
+    }
 
-// node := models.Node{
-// 	NodeType:    "service",
-// 	Module:      "core",
-// 	DestPort:    3306,
-// 	DestIp:      "192.168.60.33",
-// 	SrcPort:     60888,
-// 	SrcIp:       "192.168.60.22",
-// 	Description: "This is test data!",
-// }
+    graph := make(map[string][]string)
+    for _, node := range nodes {
+        graph[node.SrcIP] = []string{}
+    }
 
-// Key: Source ip: Value: (ip, destIP)
+    var edges []models.Edge
+    if err := initializers.DB.Find(&edges).Error; err != nil {
+        return nil, err
+    }
 
-// Do a db query to group nodes by source ip
-// Create a map of source ip to node id
-// Iterate over the map and create edges between the nodes
+    for _, edge := range edges {
+        var fromNode models.Node
+        if err := initializers.DB.First(&fromNode, edge.SrcNodeID).Error; err != nil {
+            return nil, err
+        }
+        graph[fromNode.SrcIP] = append(graph[fromNode.SrcIP], edge.DestIP)
+    }
 
+    return graph, nil
+}
 
