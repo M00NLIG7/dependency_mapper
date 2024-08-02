@@ -3,12 +3,14 @@ package main
 import (
 	"depedency-mapper-server/controllers"
 	"depedency-mapper-server/initializers"
-	"encoding/json"
 	"net/http"
-    "fmt"
 
 	"github.com/gin-gonic/gin"
 )
+
+type Node struct {
+    ip string
+}
 
 func init() {
 	initializers.InitLogger()
@@ -21,33 +23,23 @@ func main() {
 	//router.Static("/dist", "./dist")
 	router.LoadHTMLGlob("templates/*/*.html")
 
-	router.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
-
 	router.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "map", gin.H{})
 	})
 
 	router.POST("/addnode", controllers.HandleDependency)
 
+    router.POST("/api/dependency", controllers.HandleDependency)
+
 	router.GET("/map", func(c *gin.Context) {
-		networkGraph, err := controllers.FetchGraph()
-
-        if err != nil {
-            fmt.Println(err)
-        }
-
-		// Convert graph to JSON Convert map to json string
-		jsonStr, err := json.Marshal(networkGraph)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		c.HTML(http.StatusOK, "map", gin.H{"graph": string(jsonStr)})
+		c.HTML(http.StatusOK, "map", nil)
 	})
+
+
+    router.GET("/api/graph-data", controllers.GetNetworkGraph)
+
+    router.POST("/api/node", controllers.CreateOrUpdateNode)
+
 
 	// SSE endpoint: Maybe TODO?
 	/*
