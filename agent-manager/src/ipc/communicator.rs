@@ -42,6 +42,7 @@ pub trait Handler {
     ) -> impl std::future::Future<Output = std::io::Result<()>> + Send;
 }
 
+
 pub struct DefaultAgentHandler;
 
 impl Handler for DefaultAgentHandler {
@@ -82,6 +83,7 @@ impl Handler for DefaultAgentHandler {
 }
 
 // Updated AgentCommunicator with async receive_message
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AgentCommunicator<T: IPC, H: Handler> {
     ipc: T,
     handler: H,
@@ -104,61 +106,79 @@ impl<T: IPC, H: Handler> AgentCommunicator<T, H> {
     }
 }
 
-// Test bytes to request conversion
-#[test]
-fn test_bytes_to_request() {
-    println!("Test bytes to request conversion");
-    // Example of creating a health check request
-    let request = Message {
-        agent_id: "agent_001".to_string(),
-        timestamp: "2024-08-04T12:34:56Z".to_string(),
-        request: MessageType::HealthCheck {
-            status: "running".to_string(),
-            cpu_usage: 45.3,
-            memory_usage: 120.5,
-        },
-    };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // Serialize the request to JSON
-    let serialized = serde_json::to_vec(&request).unwrap();
-    println!("Serialized Request: {:?}", serialized);
+    struct MockHandler;
 
-    // Deserialize the JSON back to a Request struct
-    let deserialized: Message = serde_json::from_slice(&serialized).unwrap();
-    println!("Deserialized Request: {:?}", deserialized);
-
-    assert_eq!(request, deserialized);
-
-    // Example of handling the request using pattern matching
-    match deserialized.request {
-        MessageType::HealthCheck {
-            status,
-            cpu_usage,
-            memory_usage,
-        } => {
-            println!(
-                "Health Check - Status: {}, CPU: {}, Memory: {}",
-                status, cpu_usage, memory_usage
-            );
+    impl Handler for MockHandler {
+        async fn handle_msg(&self, message: Message) -> std::io::Result<()> {
+            // Simple mock behavior, e.g., just log the message
+            println!("MockHandler received: {:?}", message);
+            Ok(())
         }
-        MessageType::Log {
-            log_level,
-            message,
-            context,
-        } => {
-            println!(
-                "Log - Level: {}, Message: {}, Context: {:?}",
-                log_level, message, context
-            );
+    }
+
+    struct MockIPC;
+
+    impl IPC for MockIPC {
+        fn send(&self, message: &[u8]) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
+            async move {
+                // Mock sending the message
+                println!("MockIPC sending message: {:?}", message);
+                Ok(())
+            }
         }
-        MessageType::Command {
-            command,
-            parameters,
-        } => {
-            println!(
-                "Command - Command: {}, Parameters: {:?}",
-                command, parameters
-            );
+
+        fn receive(&self) -> impl std::future::Future<Output = std::io::Result<Vec<u8>>> + Send {
+            // Provide some example JSON data
+            let example_data = serde_json::to_vec(&Message {
+                agent_id: "agent_001".to_string(),
+                timestamp: "2024-08-04T12:34:56Z".to_string(),
+                request: MessageType::HealthCheck {
+                    status: "running".to_string(),
+                    cpu_usage: 45.3,
+                    memory_usage: 120.5,
+                },
+            }).unwrap();
+            async move {
+                // Mock receiving the message
+                println!("MockIPC receiving message: {:?}", example_data);
+                Ok(example_data)
+            }
         }
-    };
+
+    }
+
+    #[tokio::test]
+    async fn test_bytes_to_request() {
+        // Example of creating a health check request
+        let request = Message {
+            agent_id: "agent_001".to_string(),
+            timestamp: "2024-08-04T12:34:56Z".to_string(),
+            request: MessageType::HealthCheck {
+                status: "running".to_string(),
+                cpu_usage: 45.3,
+                memory_usage: 120.5,
+            },
+        };
+
+        // Serialize the request to JSON
+        let serialized = serde_json::to_vec(&request).unwrap();
+
+        // Deserialize the JSON back to a Request struct
+        let deserialized: Message = serde_json::from_slice(&serialized).unwrap();
+
+        assert_eq!(request, deserialized);
+    }
+
+    #[tokio::test]
+    async fn test_agent_communicator_with_mock_handler() {
+        let ipc = MockIPC;
+        let handler = MockHandler;
+        let communicator = AgentCommunicator::new(ipc, handler);
+
+        communicator.receive_message().await.unwrap();
+    }
 }
