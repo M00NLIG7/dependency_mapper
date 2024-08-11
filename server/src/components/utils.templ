@@ -1,0 +1,39 @@
+// components/utils.go
+
+package components
+
+templ LabelValuePair(label string, value string) {
+    <div class="grid gap-1">
+        @Label(label)
+        @Value(value)
+    </div>
+}
+
+templ Label(text string) {
+    <div class="text-sm text-muted-foreground">{ text }</div>
+}
+
+templ Value(text string) {
+    <div class="font-medium">{ text }</div>
+}
+
+templ Separator() {
+    <div data-orientation="horizontal" role="none" class="shrink-0 bg-border h-[1px] w-full"></div>
+}
+
+templ IconButton(ariaLabel string) {
+    <button class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8" type="button" aria-label={ariaLabel}>
+        <span class="sr-only">{ ariaLabel }</span>
+    </button>
+}
+
+templ Icon(name string) {
+    if name == "server" {
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
+            <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"></path>
+            <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
+            <path d="M12 3v6"></path>
+        </svg>
+    }
+}
+

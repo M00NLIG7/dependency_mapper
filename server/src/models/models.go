@@ -47,7 +47,7 @@ func (os OS) Value() (driver.Value, error) {
 	return string(os), nil
 }
 
-// Maybe add CPE string for ndoe existing service comparison?
+// Maybe add CPE string for node existing service comparison?
 
 // Dependency represents a dependency between two nodes
 type Dependency struct {
@@ -94,12 +94,14 @@ func AddNode(db *gorm.DB, srcIP string, os OS) (*Node, error) {
 		}
 	} else {
 		// Node exists, update it if necessary
-		if node.OS != os {
-			node.OS = os
-			if err := db.Save(&node).Error; err != nil {
-				return nil, fmt.Errorf("failed to update node: %w", err)
-			}
+		if node.OS == os {
+            return &node, nil
 		}
+
+        node.OS = os
+        if err := db.Save(&node).Error; err != nil {
+            return nil, fmt.Errorf("failed to update node: %w", err)
+        }
 	}
 
 	// Return the existing or newly created node
@@ -129,5 +131,19 @@ func AddEdge(db *gorm.DB, sourceID uint, targetIP string) (*Edge, error) {
 	}
 
 	return &edge, nil
+}
+
+func AddDependency(db *gorm.DB, dep *Dependency) (*Dependency, error) {
+    // Check if the dependency already exists
+    if err := db.Where("local_ip = ? AND remote_ip = ? AND module = ?", dep.LocalIp, dep.RemoteIp, dep.Module).First(dep).Error; err == nil {
+        return dep, nil
+    }
+
+    // If the dependency does not exist, create a new one
+    if err := db.Create(dep).Error; err != nil {
+        return nil, fmt.Errorf("failed to create dependency: %w", err)
+    }
+
+    return dep, nil
 }
 

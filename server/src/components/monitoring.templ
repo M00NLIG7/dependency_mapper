@@ -1,0 +1,27 @@
+// components/monitoring.go
+
+package components
+
+templ MonitoringCard() {
+    @Card("Monitoring") {
+        @ProgressBar("CPU Utilization", 75)
+        @ProgressBar("Memory Usage", 60)
+        @ProgressBar("Disk Space", 85)
+        @ProgressBar("Network Traffic", 45)
+    }
+}
+
+css progressBarFillStyle(value int) {
+    transform: templ.SafeCSS(fmt.Sprintf("transform: translateX(-%d%%);", 100-value));
+}
+
+templ ProgressBar(label string, value int) {
+    <div class="grid gap-1">
+        @Label(label)
+
+        <div aria-valuemax="100" aria-valuemin="0" role="progressbar" data-state="loading" data-max="100" class="relative h-2 w-full overflow-hidden rounded-full bg-primary/20">
+            <div data-state="loading" data-max="100" class={"h-full w-full flex-1 bg-primary transition-all translate-x-100"} style="transform: translateX(-25%)"></div>
+        </div>
+    </div>
+}
+

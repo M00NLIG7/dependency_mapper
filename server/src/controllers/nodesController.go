@@ -14,14 +14,27 @@ type NodeRequest struct {
 	OS    models.OS `json:"os" binding:"required"`
 }
 
+func GetDependencies() []models.Dependency {
+    var dependencies []models.Dependency
+    initializers.DB.Find(&dependencies)
+    return dependencies
+}
+
 func HandleDependency(c *gin.Context) {
-	var dep models.Dependency
+    var dep *models.Dependency
 
 	// Validate the input data
 	if err := c.ShouldBindJSON(&dep); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
 		return
 	}
+
+     
+    dep, err := models.AddDependency(initializers.DB, dep)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add dependency"})
+        return
+    }
 
 	// Add or get the local node
 	localNode, err := models.AddNode(initializers.DB, dep.LocalIp, dep.LocalOS)
