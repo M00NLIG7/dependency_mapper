@@ -36,7 +36,7 @@ func NodeDashboard() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<style>\n    @import \"/static/css/globals.css\";\n</style><div class=\"flex min-h-screen flex-col bg-muted/40\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<style>\n    @import \"/static/css/globals.css\";\n    </style><div class=\"flex min-h-screen flex-col bg-muted/40\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -52,7 +52,7 @@ func main() {
 	})
 
 	router.GET("/map", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "map", nil)
+        components.NetworkGraph().Render(c.Request.Context(), c.Writer)
 	})
 
     router.GET("/update-dependencies", func(c *gin.Context) {

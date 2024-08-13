@@ -1,0 +1,205 @@
+package components
+
+templ NetworkGraph() {
+	<script src="/static/js/tailwind-3.4.5.js"></script>
+	<script src="/static/js/htmx.min.js"></script>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	@TailwindConfig()
+	<style>
+    @import "/static/css/globals.css";
+</style>
+	<svg width="960" height="600"></svg>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<script>
+    var nodes = [];
+    var links = [];
+
+    var icons = {
+        "Linux": "/static/assets/Linux.svg",
+        "Windows": "/static/assets/Windows.svg",
+        "Unknown": "/static/assets/Unknown.svg",
+    };
+
+    function getNodeIcon(node) {
+        return icons[node.os] || icons["Unknown"];
+    }
+
+    function getNeighbors(node) {
+        return links.reduce(function (neighbors, link) {
+            if (link.target.id === node.id) {
+                neighbors.push(link.source.id);
+            } else if (link.source.id === node.id) {
+                neighbors.push(link.target.id);
+            }
+            return neighbors;
+        },
+            [node.id]
+        );
+    }
+
+    function isNeighborLink(node, link) {
+        return link.target.id === node.id || link.source.id === node.id;
+    }
+
+    function getLinkColor(node, link) {
+        return isNeighborLink(node, link) ? 'green' : '#E5E5E5';
+    }
+
+    function getTextColor(node, neighbors) {
+        return Array.isArray(neighbors) && neighbors.indexOf(node.id) > -1 ? 'green' : 'black';
+    }
+
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+
+    var svg = d3.select('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    var linkElements,
+        nodeElements,
+        textElements;
+
+    var linkGroup = svg.append('g').attr('class', 'links');
+    var nodeGroup = svg.append('g').attr('class', 'nodes');
+    var textGroup = svg.append('g').attr('class', 'texts');
+
+    var selectedId;
+
+    var linkForce = d3.forceLink()
+        .id(function (link) {return link.id;})
+        .strength(function (link) {return link.strength;});
+
+    var simulation = d3.forceSimulation()
+        .force('link', d3.forceLink().id(function (d) {return d.id;}).distance(150))
+        .force('charge', d3.forceManyBody().strength(-50))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(function (d) {
+            return d.label ? (d.label.length * 3) + 15 : 25; // Adjust radius based on label length
+        }).strength(0.7));
+
+    var dragDrop = d3.drag().on('start', function (node) {
+        node.fx = node.x;
+        node.fy = node.y;
+    }).on('drag', function (node) {
+        simulation.alphaTarget(0.7).restart();
+        node.fx = d3.event.x;
+        node.fy = d3.event.y;
+    }).on('end', function (node) {
+        if (!d3.event.active) {
+            simulation.alphaTarget(0);
+        }
+        node.fx = null;
+        node.fy = null;
+    });
+
+    function selectNode(selectedNode) {
+        window.location.href = "/node/" + selectedNode.id;
+    }
+
+    function updateData(selectedNode) {
+        var neighbors = getNeighbors(selectedNode);
+        var newNodes = nodes.filter(function (node) {
+            return neighbors.indexOf(node.id) > -1;
+        });
+
+        var diff = {
+            removed: nodes.filter(function (node) {return newNodes.indexOf(node) === -1;}),
+            added: newNodes.filter(function (node) {return nodes.indexOf(node) === -1;})
+        };
+
+        diff.removed.forEach(function (node) {nodes.splice(nodes.indexOf(node), 1);});
+        diff.added.forEach(function (node) {nodes.push(node);});
+
+        links = links.filter(function (link) {
+            return link.target.id === selectedNode.id || link.source.id === selectedNode.id;
+        });
+    }
+
+    function updateGraph() {
+        linkElements = linkGroup.selectAll('line')
+            .data(links, function (link) {
+                return link.target.id + link.source.id;
+            });
+
+        linkElements.exit().remove();
+
+        var linkEnter = linkElements.enter().append('line')
+            .attr('stroke-width', 1)
+            .attr('stroke', 'rgba(50, 50, 50, 0.2)');
+
+        linkElements = linkEnter.merge(linkElements);
+
+
+        nodeElements = nodeGroup.selectAll('image')
+            .data(nodes, function (node) {return node.id;});
+
+        nodeElements.exit().remove();
+
+        var nodeEnter = nodeElements.enter()
+            .append('image')
+            .attr('xlink:href', function (node) {return getNodeIcon(node);})
+            .attr('width', 32)
+            .attr('height', 32)
+            .attr('x', function (node) {return node.x - 16;})
+            .attr('y', function (node) {return node.y - 16;})
+            .call(dragDrop)
+            .on('click', selectNode);
+
+        nodeElements = nodeEnter.merge(nodeElements);
+
+        textElements = textGroup.selectAll('text')
+            .data(nodes, function (node) {return node.id;});
+
+        textElements.exit().remove();
+
+        var textEnter = textElements.enter()
+            .append('text')
+            .text(function (node) {return node.id;})
+            .attr('font-size', 15)
+            .attr('dx', 15)
+            .attr('dy', 4);
+
+        textElements = textEnter.merge(textElements);
+    }
+
+    // Update the positioning of the text labels
+    function updateSimulation() {
+        updateGraph();
+
+        simulation.nodes(nodes).on('tick', () => {
+            nodeElements
+                .attr('x', function (node) {return node.x - 16;})
+                .attr('y', function (node) {return node.y - 16;});
+            textElements
+                .attr('x', function (node) {return node.x + 15;})
+                .attr('y', function (node) {return node.y + 5;});
+            linkElements
+                .attr('x1', function (link) {return link.source.x;})
+                .attr('y1', function (link) {return link.source.y;})
+                .attr('x2', function (link) {return link.target.x;})
+                .attr('y2', function (link) {return link.target.y;});
+        });
+
+        simulation.force('link').links(links);
+        simulation.alphaTarget(0.7).restart();
+    }
+
+    fetch('/api/graph-data')
+        .then(response => response.json())
+        .then(data => {
+            nodes = data.nodes.map(node => ({
+                id: node.id,
+                os: node.os
+            }));
+
+            links = data.edges.map(edge => ({
+                source: edge.source,
+                target: edge.target
+            }));
+
+            updateSimulation();
+        });
+
+</script>
+}

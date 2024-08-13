@@ -3,50 +3,50 @@
 package components
 
 templ NodeDashboard() {
-<script src="/static/js/tailwind-3.4.5.js"></script>
-<script src="/static/js/htmx.min.js"></script>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-@TailwindConfig()
-<style>
+	<script src="/static/js/tailwind-3.4.5.js"></script>
+	<script src="/static/js/htmx.min.js"></script>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	@TailwindConfig()
+	<style>
     @import "/static/css/globals.css";
-</style>
-<div class="flex min-h-screen flex-col bg-muted/40">
-    @Navbar()
-    <main class="flex-1 p-4 sm:p-6">
-        <div class="grid gap-6 lg:grid-cols-[1fr_300px]">
-            <div>
-                <div class="grid gap-6">
-                    @ServerOverview()
-                    @DependenciesTable()
-                </div>
-            </div>
-            <div class="grid gap-6">
-                @ServerDetails()
-                @MonitoringCard()
-            </div>
-        </div>
-    </main>
-</div>
+    </style>
+	<div class="flex min-h-screen flex-col bg-muted/40">
+		@Navbar()
+		<main class="flex-1 p-4 sm:p-6">
+			<div class="grid gap-6 lg:grid-cols-[1fr_300px]">
+				<div>
+					<div class="grid gap-6">
+						@ServerOverview()
+						@DependenciesTable()
+					</div>
+				</div>
+				<div class="grid gap-6">
+					@ServerDetails()
+					@MonitoringCard()
+				</div>
+			</div>
+		</main>
+	</div>
 }
 
 templ Navbar() {
-<header class="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:h-16 sm:px-6">
-    @NavbarBrand()
-    <div class="ml-auto flex items-center gap-2">
-        @IconButton("More")
-    </div>
-</header>
+	<header class="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:h-16 sm:px-6">
+		@NavbarBrand()
+		<div class="ml-auto flex items-center gap-2">
+			@IconButton("More")
+		</div>
+	</header>
 }
 
 templ NavbarBrand() {
-<a class="flex items-center gap-2 font-semibold" href="#">
-    @Icon("server")
-    <span>Acme Server</span>
-</a>
+	<a class="flex items-center gap-2 font-semibold" href="#">
+		@Icon("server")
+		<span>Acme Server</span>
+	</a>
 }
 
 templ TailwindConfig() {
-<script>
+	<script>
     tailwind.config = {
         theme: {
             extend: {
