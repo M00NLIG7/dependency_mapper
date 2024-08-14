@@ -1,4 +1,4 @@
-pub trait IPC {
+pub trait IPC: Send + Sync + 'static {
     fn send(&self, message: &[u8]) -> impl std::future::Future<Output = std::io::Result<()>> + Send;
     fn receive(&self) -> impl std::future::Future<Output = std::io::Result<Vec<u8>>> + Send;
 }
