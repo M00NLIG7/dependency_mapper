@@ -35,9 +35,6 @@ func main() {
 
     router.Static("/static", "./static")
 
-	//router.Static("/dist", "./dist")
-	router.LoadHTMLGlob("templates/*/*.html")
-
 	router.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "map", gin.H{})
 	})

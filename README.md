@@ -79,6 +79,57 @@ The graph structure encapsulates the entire network, comprising a collection of 
 }
 ```
 
+# Program Architecture
+
+Local Machine
++-----------------------------------+
+|   +-----------------------------+ |
+|   |    Rust Agent Manager       | |
+|   |  +-----------------------+  | |
+|   |  | Agent Configurations  |  | |
+|   |  | (YAML)                |  | |
+|   |  +-----------------------+  | |
+|   |           |                 | |
+|   |  +--------v--------+        | |
+|   |  | Agent Scheduler |        | |
+|   |  +--------+--------+        | |
+|   |           |                 | |
+|   +-----------------------------+ |
+|             |   |   |             |
+|    +--------v-+ | +-v----------+  |
+|    |Python    | | |Go Agent    |  |
+|    |Agent     | | |            |  |
+|    +----------+ | +------------+  |
+|      +----------v----------+      |
+|      |   Node.js Agent     |      |
+|      +---------------------+      |
++-----------------------------------+
+              |
+              | HTTP/HTTPS
+              v
++-----------------------------------+
+|        Go Server                  |
++-----------------------------------+
+
+Rust Agent Manager:
+
+Reads YAML configurations for all local agents
+Schedules and manages the lifecycle of agents
+Monitors agent health and restarts if necessary
+Handles logging and error reporting
+
+
+Agent Configurations (YAML):
+
+Define each agent's properties, schedule, and data collection parameters
+
+
+Multi-language Agents:
+
+Implement specific data collection logic
+Post data directly to your existing server
+Can be simple scripts or more complex programs
+
 # Data Considerations
 
 - ## Uniqueness: Ensure each node and edge has a unique identifier to avoid ambiguities in the network graph.
