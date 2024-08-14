@@ -1,16 +1,16 @@
 use super::IPC;
-use tokio::net::{UnixStream, UnixListener};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::Mutex;
+use log::{debug, error, info};
 use std::path::Path;
 use std::sync::Arc;
-use log::{debug, error, info};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::Mutex;
 
 // UnixSocketIPC represents an IPC mechanism using Unix domain sockets
 pub struct UnixSocketIPC {
     pub socket_path: String,
     // Arc<Mutex<Option<UnixListener>>> allows for thread-safe, mutable access to the listener
-    listener: Arc<Mutex<Option<UnixListener>>>,
+    listener: Arc<Option<UnixListener>>,
 }
 
 impl UnixSocketIPC {
@@ -27,7 +27,7 @@ impl UnixSocketIPC {
         debug!("Listener bound successfully");
         Ok(Self {
             socket_path,
-            listener: Arc::new(Mutex::new(Some(listener))),
+            listener: Arc::new(Some(listener)),
         })
     }
 }
@@ -57,35 +57,32 @@ impl IPC for UnixSocketIPC {
         Ok(())
     }
 
-    // Receive a message from the Unix domain socket
     async fn receive(&self) -> std::io::Result<Vec<u8>> {
         debug!("Attempting to receive message");
-        // Lock the listener to ensure thread-safe access
-        let mut listener_guard = self.listener.lock().await;
-        // Get a mutable reference to the listener, or return an error if it's been taken
-        let listener = listener_guard.as_mut().ok_or_else(|| {
+
+        if let Some(listener) = self.listener.as_ref() {
+            debug!("Waiting for incoming connection");
+            let (mut stream, _) = listener.accept().await?;
+            debug!("Connection accepted");
+            let mut buffer = Vec::new();
+            stream.read_to_end(&mut buffer).await?;
+            debug!("Message received: {:?}", String::from_utf8_lossy(&buffer));
+            Ok(buffer)
+        } else {
             error!("Listener has already been taken");
-            std::io::Error::new(std::io::ErrorKind::Other, "Listener has already been taken")
-        })?;
-
-        debug!("Waiting for incoming connection");
-        // Accept an incoming connection
-        let (mut stream, _) = listener.accept().await?;
-        debug!("Connection accepted");
-        let mut buffer = Vec::new();
-        // Read the entire message into the buffer
-        stream.read_to_end(&mut buffer).await?;
-        debug!("Message received: {:?}", String::from_utf8_lossy(&buffer));
-
-        Ok(buffer)
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Listener has already been taken",
+            ))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{timeout, Duration};
     use env_logger;
+    use tokio::time::{timeout, Duration};
 
     // Initialize the logger for tests
     fn init() {
@@ -101,7 +98,7 @@ mod tests {
         let ipc = UnixSocketIPC::new(socket_path.clone()).await.unwrap();
         let message = b"Hello, world!";
         let ipc2 = ipc.clone();
-        
+
         // Spawn a task to receive the message
         let handle = tokio::spawn(async move {
             debug!("Receiver: Starting to receive");
