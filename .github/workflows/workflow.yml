@@ -1,0 +1,49 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [agent-manager, std_modules]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - name: Build ${{ matrix.project }}
+      run: |
+        cd ${{ matrix.project }}
+        cargo build --release --verbose
+    - name: Run tests for ${{ matrix.project }}
+      run: |
+        cd ${{ matrix.project }}
+        cargo test --verbose
+
+  build-server:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'  # Adjust this to your Go version
+    - name: Build server
+      run: |
+        cd server/src
+        go build -v ./...
+    - name: Test server
+      run: |
+        cd server/src
+        go test -v ./...
