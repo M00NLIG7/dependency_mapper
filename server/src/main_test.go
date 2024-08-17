@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-    "fmt"
-
 	"github.com/stretchr/testify/assert"
 
 	"depedency-mapper-server/controllers"
@@ -66,7 +64,6 @@ func TestHandleDependency(t *testing.T) {
 			RemotePort:  8081,
 			RemoteIp:    "192.168.1.2",
 			Description: "exampleDescription",
-			Signature:   "exampleSignature",
 		}
 
 		// Marshal dependency to JSON
