@@ -1,0 +1,77 @@
+plugins:
+  - name: echo_plugin
+    command: echo
+    spec:
+      input_parameters:
+        - name: message
+          type: String
+          required: true
+          description: The message to echo
+      return_values:
+        - name: output
+          type: String
+          required: true
+          description: The echoed message
+    args:
+      message: "Hello, World!"
+
+  - name: simple_math_plugin
+    command: bash
+    spec:
+      input_parameters:
+        - name: x
+          type: Integer
+          required: true
+          description: The first number
+        - name: y
+          type: Integer
+          required: true
+          description: The second number
+      return_values:
+        - name: sum
+          type: Integer
+          required: true
+          description: The sum of x and y
+        - name: product
+          type: Integer
+          required: true
+          description: The product of x and y
+    args:
+      x: 5
+      y: 3
+
+  - name: list_files_plugin
+    command: bash
+    spec:
+      input_parameters:
+        - name: directory
+          type: String
+          required: true
+          description: The directory to list files from
+      return_values:
+        - name: files
+          type: String
+          required: true
+          description: List of file names, newline-separated
+        - name: count
+          type: Integer
+          required: true
+          description: Number of files found
+    args:
+      directory: "/tmp"
+
+  - name: env_var_plugin
+    command: bash
+    spec:
+      input_parameters:
+        - name: var_name
+          type: String
+          required: true
+          description: Name of the environment variable to read
+      return_values:
+        - name: value
+          type: String
+          required: false
+          description: Value of the environment variable (if exists)
+    args:
+      var_name: "HOME"

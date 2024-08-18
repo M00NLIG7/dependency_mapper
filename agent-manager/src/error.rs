@@ -17,6 +17,16 @@ pub enum Error {
 
     #[error("Task join error: {0}")]
     TaskJoinError(String),
+
+    #[error("Invalid plugin output: {0}")]
+    InvalidPluginOutput(String),
+
+    #[error("Invalid plugin input: {0}")]
+    InvalidPluginInput(String),
+
+    #[error("Invalid plugin type: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
+
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

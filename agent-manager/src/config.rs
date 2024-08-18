@@ -1,19 +1,15 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use serde_json::Value;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct CollectedData {
-    pub source: String,
-    pub data: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PluginConfig {
     pub name: String,
     pub command: String,
-    pub args: Vec<String>,
+    pub args: HashMap<String, Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Config {
     pub plugins: Vec<PluginConfig>,
 }
