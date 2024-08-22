@@ -1,5 +1,5 @@
-use thiserror::Error;
 use std::io;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -12,21 +12,27 @@ pub enum Error {
     #[error("JSON parsing error: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("Plugin execution error: {0}")]
-    PluginExecution(String),
+    #[error("Request error: {0}")]
+    Request(#[from] reqwest::Error),
+
+    #[error("Module execution error: {0}")]
+    ModuleExecution(String),
 
     #[error("Task join error: {0}")]
     TaskJoinError(String),
 
     #[error("Invalid plugin output: {0}")]
-    InvalidPluginOutput(String),
+    InvalidModuleOutput(String),
 
     #[error("Invalid plugin input: {0}")]
-    InvalidPluginInput(String),
+    InvalidModuleInput(String),
 
     #[error("Invalid plugin type: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
 
+    #[error("Module not found: {0}")]
+    ModuleNotFound(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+

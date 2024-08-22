@@ -1,22 +1,17 @@
-use agent::engine::CollectionEngine;
-use agent::error::Error;
+use std::path::Path;
+use agent::Config;
+use agent::CollectionEngine;
+
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    println!("Loading configuration...");
-    let engine = CollectionEngine::load_config("plugins.yaml")?;
-    println!("Configuration loaded successfully");
-    
-    println!("Starting data collection...");
-    let results = engine.collect_all_data().await;
-    println!("Data collection completed");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = Path::new("test.yaml");
+    let config_str = std::fs::read_to_string(config_path)?;
+    let config: Config = serde_yaml::from_str(&config_str)?;
 
-    for (index, result) in results.iter().enumerate() {
-        match result {
-            Ok(data) => println!("Plugin {}: Collected data: {:?}", index, data),
-            Err(e) => eprintln!("Plugin {}: Error collecting data: {}", index, e),
-        }
-    }
+    let mut engine = CollectionEngine::new(config);
+    
+    engine.run().await?;
 
     Ok(())
 }

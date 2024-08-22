@@ -1,0 +1,21 @@
+---
+server:
+  url: "http://localhost:8000/api/v1/collect"
+  timeout: 30
+
+agent:
+  default_interval: 300  # 5 minutes in seconds
+  module_paths:
+    - "/usr/local/lib/dep_map/modules"
+    - "/usr/share/dep_map/modules"
+    - "/tmp"
+  log_level: "info"
+
+modules:
+  connection:
+    description: "Standard connection module"
+    interval: 600  # 10 minutes in seconds
+    args:
+      timeout: 30
+      retries: 3
+

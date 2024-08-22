@@ -1,15 +1,30 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use serde_json::Value;
+use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct PluginConfig {
-    pub name: String,
-    pub command: String,
-    pub args: HashMap<String, Value>,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Config {
+    pub server: ServerConfig,
+    pub agent: AgentConfig,
+    pub modules: HashMap<String, ModuleConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct Config {
-    pub plugins: Vec<PluginConfig>,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ServerConfig {
+    pub url: String,
+    pub timeout: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AgentConfig {
+    pub default_interval: u64,
+    pub module_paths: Vec<PathBuf>,
+    pub log_level: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ModuleConfig {
+    pub description: Option<String>,
+    pub interval: Option<u64>,
+    pub args: Option<HashMap<String, serde_json::Value>>,
 }
