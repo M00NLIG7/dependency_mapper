@@ -10,14 +10,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ServerConfig {
-    pub url: String,
-    pub timeout: u64,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct AgentConfig {
-    pub default_interval: u64,
     pub module_paths: Vec<PathBuf>,
     pub log_level: String,
 }
@@ -25,6 +18,12 @@ pub struct AgentConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ModuleConfig {
     pub description: Option<String>,
-    pub interval: Option<u64>,
+    pub interval: u64,
     pub args: Option<HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ServerConfig {
+    pub url: String,
+    pub timeout: u64,
 }

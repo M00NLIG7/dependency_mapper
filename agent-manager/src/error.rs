@@ -32,6 +32,9 @@ pub enum Error {
 
     #[error("Module not found: {0}")]
     ModuleNotFound(String),
+
+    #[error("Invalid module name: {0}")]
+    InvalidModuleName(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

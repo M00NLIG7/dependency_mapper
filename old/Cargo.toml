@@ -1,5 +1,5 @@
 [package]
-name = "std_modules"
+name = "modules"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,3 @@ edition = "2021"
 procfs = "0.16.0"
 serde = { version = "1.0.208", features = ["derive"] }
 serde_json = "1.0.125"
-

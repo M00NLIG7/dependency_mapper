@@ -3,6 +3,7 @@ use procfs::{
     net::{TcpNetEntry, TcpState, UdpNetEntry, UdpState},
     process::{FDTarget, Stat},
 };
+use crate::{implement_module, base::Response};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -28,22 +29,6 @@ pub struct Process {
     pub(crate) name: String,
 }
 
-/// ConnectionState represents the state of a network connection
-/// It is a subset of the states in TcpState and UdpState
-///
-/// The states are:
-/// - Established
-/// - SynSent
-/// - SynRecv
-/// - FinWait1
-/// - FinWait2
-/// - TimeWait
-/// - Closed
-/// - CloseWait
-/// - LastAck
-/// - Listen
-/// - Closing
-/// - Unknown
 #[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq, Clone, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectionState {
@@ -232,4 +217,29 @@ pub fn conn_info() -> serde_json::Value {
 
     // Serialize the connections
     json!(all_connections)
+}
+
+
+#[derive(Deserialize, Default)]
+pub struct ConnectionArgs {}
+
+fn run_connections(args: ConnectionArgs) -> Result<Response, Box<dyn std::error::Error>> {
+    let mut response = Response::new(format!("Hello, {}!", "c"), false, false);
+    response.add_extra("data", &conn_info())?;
+    Ok(response)
+}
+
+implement_module!(ConnectionModule, ConnectionArgs, run_connections);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_connection_info() {
+        let conn_info = conn_info();
+
+        dbg!(&conn_info);
+        assert!(conn_info.is_array());
+    }
 }

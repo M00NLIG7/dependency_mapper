@@ -12,10 +12,12 @@ agent:
   log_level: "info"
 
 modules:
-  connection:
-    description: "Standard connection module"
-    interval: 600  # 10 minutes in seconds
-    args:
-      timeout: 30
-      retries: 3
+  std.modules.connection:
+    description: "Description of module1"
+    interval: 60  # Run every 60 seconds
+      #  module2:
+      #    description: "Description of module2"
+      #    interval: 300  # Run every 5 minutes
+      #    args:
+      #      key2: "value2"
 
