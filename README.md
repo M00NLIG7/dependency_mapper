@@ -82,6 +82,7 @@ The graph structure encapsulates the entire network, comprising a collection of 
 # Program Architecture
 
 Local Machine
+```
 +-----------------------------------+
 |   +-----------------------------+ |
 |   |    Rust Agent Manager       | |
@@ -110,7 +111,7 @@ Local Machine
 +-----------------------------------+
 |        Go Server                  |
 +-----------------------------------+
-
+```
 Rust Agent Manager:
 
 Reads YAML configurations for all local agents
