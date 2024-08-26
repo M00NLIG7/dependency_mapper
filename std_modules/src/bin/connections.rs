@@ -1,65 +1,29 @@
-use procfs::process::{FDTarget, Stat};
 use procfs::net::{TcpNetEntry, TcpState, UdpNetEntry, UdpState};
-
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::thread;
+use std_modules::response::{Response, Dependency};
 use std_modules::implement_module;
-use std_modules::response::Response;
-
-/// NetworkConnection represents a network connection
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkConnection {
-    pub(crate) local_address: String,
-    pub(crate) remote_address: Option<String>,
-    pub(crate) state: Option<ConnectionState>,
-    pub(crate) protocol: String,
-    pub(crate) process: Option<Process>,
-}
-
-/// Process represents a process
-#[derive(Debug, Deserialize, Serialize, Eq, Hash, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Process {
-    pub(crate) pid: u32,
-    pub(crate) name: String,
-}
+use thiserror::Error;
 
 #[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq, Clone, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectionState {
-    /// Established state
     Established,
-    /// SynSent state
     SynSent,
-    /// SynRecv state
     SynRecv,
-    /// FinWait1 state
     FinWait1,
-    /// FinWait2 state
     FinWait2,
-    /// TimeWait state
     TimeWait,
-    /// Closed state
     Close,
-    /// CloseWait state
     CloseWait,
-    /// LastAck state
     LastAck,
-    /// Listen state
     Listen,
-    /// Closing state
     Closing,
-    /// Unknown state
     #[default]
     Unknown,
 }
 
 impl ConnectionState {
-    /// Returns true if the state is Closed
     pub fn is_closed(&self) -> bool {
         matches!(self, ConnectionState::Close)
     }
@@ -134,115 +98,130 @@ macro_rules! impl_network_data {
 impl_network_data!(UdpNetEntry, "UDP");
 impl_network_data!(TcpNetEntry, "TCP");
 
+fn parse_ipv6_address(address: &str) -> Option<(&str, &str)> {
+    let mut parts = address.strip_prefix("[")?.split("]:");
+    let ip = parts.next()?;
+    let port = parts.last()?;
+    Some((ip, port))
+}
+
+fn parse_ipv4_address(address: &str) -> Option<(&str, &str)> {
+    let mut parts = address.split(':');
+    let ip = parts.next()?;
+    let port = parts.last()?;
+    Some((ip, port))
+}
+
+fn parse_address(address: &str) -> Option<(&str, &str)> {
+    if address.contains('[') {
+        parse_ipv6_address(address)
+    } else {
+        parse_ipv4_address(address)
+    }
+}
+
 fn process_network_entries<F, T>(
     fetch_entries: F,
-    map: Arc<HashMap<u64, Stat>>,
-) -> Vec<NetworkConnection>
+    omit_local_connections: bool,
+) -> Vec<Dependency>
 where
     F: Fn() -> Result<Vec<T>, procfs::ProcError> + Send + 'static,
-    T: NetworkData + Send + 'static, // Ensure T is Send
+    T: NetworkData + Send + 'static,
 {
-    // Spawn a thread to process the entries
-    let handle = thread::spawn(move || {
-        let mut connections = Vec::new();
+    thread::spawn(move || {
+        let mut dependencies = Vec::new();
 
-        // Fetch the entries
         if let Ok(entries) = fetch_entries() {
-            // Iterate over the entries
             for entry in entries {
-                let state = entry.state(); // Get the state without consuming entry
-
+                let state = entry.state();
                 if state.is_closed() {
                     continue;
                 }
 
-                // Filter out CLOSE connections
-                let connection = NetworkConnection {
-                    local_address: entry.local_address(),
-                    remote_address: Some(entry.remote_address()),
-                    state: Some(state),
-                    protocol: entry.protocol(),
-                    process: map.get(&entry.inode()).map(|stat| Process {
-                        pid: stat.pid as u32,
-                        name: stat.comm.clone(),
-                    }),
-                    // .map(|stat| (stat.pid, stat.comm.clone())),
-                };
-                connections.push(connection);
+                if let (Some((local_ip, local_port)), Some((remote_ip, remote_port))) = 
+                    (parse_address(&entry.local_address()), parse_address(&entry.remote_address())) {
+                    if omit_local_connections {
+                        if local_ip.contains("127.0.0.") || remote_ip.contains("127.0.0.") || local_ip.contains("::1") || remote_ip.contains("::1") {
+                            eprintln!("Omitting local connection: {}:{} -> {}:{}", local_ip, local_port, remote_ip, remote_port);
+                            continue;
+                        }
+                    }
+
+                    if let (Ok(local_port), Ok(remote_port)) = (local_port.parse::<i32>(), remote_port.parse::<i32>()) {
+                        let dependency = Dependency {
+                            module: "Connections".to_string(),
+                            local_port,
+                            local_ip: local_ip.to_string(),
+                            local_os: "Linux".to_string(),
+                            remote_port,
+                            remote_ip: remote_ip.to_string(),
+                            description: format!("{} connection", entry.protocol()),
+                        };
+                        dependencies.push(dependency);
+                    }
+                }
             }
         }
-        connections
-    });
-
-    handle.join().unwrap() // Join the thread and unwrap the result
+        dependencies
+    }).join().unwrap()
 }
 
-/// conn_info returns a JSON string of all network connections
-pub fn conn_info() -> serde_json::Value {
-    let all_procs = procfs::process::all_processes().expect("Cant read /proc"); // handle errors appropriately
+pub fn conn_info(omit_local_connections: bool) -> Vec<Dependency> {
+
+    // TODO: Do we need the PID?
+    /*
+    let all_procs = procfs::process::all_processes().expect("Can't read /proc");
     let mut map: HashMap<u64, Stat> = HashMap::new();
 
     for process in all_procs.filter_map(Result::ok) {
-        let stat = match process.stat() {
-            Ok(s) => s,
-            Err(_) => continue, // Skip processes where stat can't be obtained
-        };
-
-        let fds = match process.fd() {
-            Ok(f) => f,
-            Err(_) => continue, // Skip processes where fds can't be obtained
-        };
-
-        for fd in fds.filter_map(Result::ok) {
-            if let FDTarget::Socket(inode) = fd.target {
-                map.insert(inode, stat.clone());
+        if let Ok(stat) = process.stat() {
+            if let Ok(fds) = process.fd() {
+                for fd in fds.filter_map(Result::ok) {
+                    if let FDTarget::Socket(inode) = fd.target {
+                        map.insert(inode, stat.clone());
+                    }
+                }
             }
         }
     }
 
     let shared_map = Arc::new(map);
+    */
 
-    let tcp_connections = process_network_entries(procfs::net::tcp, Arc::clone(&shared_map));
-    let udp_connections = process_network_entries(procfs::net::udp, Arc::clone(&shared_map));
-    let tcp6_connections = process_network_entries(procfs::net::tcp6, Arc::clone(&shared_map));
-    let udp6_connections = process_network_entries(procfs::net::udp6, shared_map);
+    let tcp_dependencies = process_network_entries(procfs::net::tcp, omit_local_connections);
+    let udp_dependencies = process_network_entries(procfs::net::udp , omit_local_connections);
+    let tcp6_dependencies = process_network_entries(procfs::net::tcp6, omit_local_connections);
+    let udp6_dependencies = process_network_entries(procfs::net::udp6, omit_local_connections);
 
-    // Combine TCP and UDP connections
-    let mut all_connections = Vec::new();
-    all_connections.extend(tcp_connections);
-    all_connections.extend(udp_connections);
-    all_connections.extend(tcp6_connections);
-    all_connections.extend(udp6_connections);
+    let mut all_dependencies = Vec::new();
+    all_dependencies.extend(tcp_dependencies);
+    all_dependencies.extend(udp_dependencies);
+    all_dependencies.extend(tcp6_dependencies);
+    all_dependencies.extend(udp6_dependencies);
 
-    // Serialize the connections
-    json!(all_connections)
+    all_dependencies
 }
 
+#[derive(Debug, Error)]
+pub enum ModuleError {
+    #[error("Failed to get connection information: {0}")]
+    ConnectionError(#[from] procfs::ProcError),
+}
 
 #[derive(Deserialize, Default)]
-pub struct ConnectionArgs {}
+pub struct ConnectionArgs {
+    omit_local_connections: bool,
+}
 
-fn run_connections(_args: ConnectionArgs) -> Result<Response, Box<dyn std::error::Error>> {
-    let mut response = Response::new(format!("Hello, {}!", "c"), false, false);
-    response.add_extra("data", &conn_info())?;
+fn run_connections(args: ConnectionArgs) -> Result<Response, ModuleError> {
+
+    let conn_info = conn_info(args.omit_local_connections);
+    let response = Response::new(conn_info, false, false);
     Ok(response)
 }
 
-implement_module!(ConnectionModule, ConnectionArgs, run_connections);
+implement_module!(ConnectionModule, ConnectionArgs, ModuleError, run_connections);
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_connection_info() {
-        let conn_info = conn_info();
-
-        dbg!(&conn_info);
-        assert!(conn_info.is_array());
-    }
-}
 
 fn main() {
     std_modules::response::run_module::<ConnectionModule>();

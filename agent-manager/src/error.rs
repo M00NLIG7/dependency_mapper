@@ -35,6 +35,9 @@ pub enum Error {
 
     #[error("Invalid module name: {0}")]
     InvalidModuleName(String),
+
+    #[error("Detach error: {0}")]
+    DetachError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

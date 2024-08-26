@@ -15,6 +15,8 @@ modules:
   std.modules.connection:
     description: "Description of module1"
     interval: 60  # Run every 60 seconds
+    args:
+      omit_local_connections: true
       #  module2:
       #    description: "Description of module2"
       #    interval: 300  # Run every 5 minutes

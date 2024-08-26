@@ -85,10 +85,6 @@ func main() {
         c.HTML(http.StatusOK, "main", data)
     })
     
-
-    
-
-
     router.GET("/api/graph-data", controllers.GetNetworkGraph)
 
     router.POST("/api/node", controllers.CreateOrUpdateNode)
