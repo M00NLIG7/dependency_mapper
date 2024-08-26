@@ -1,2 +1,2 @@
 depmap.db
-./components/*_templ.go
+components/*_templ.go
