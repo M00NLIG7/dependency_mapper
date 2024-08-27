@@ -138,3 +138,6 @@ Can be simple scripts or more complex programs
 - ## Flexibility: Allow for the inclusion of various types of dependencies beyond LDAP, such as HTTP, database connections, etc., to provide a comprehensive network map.
 - ## Security: Include security-related properties where relevant, such as encryption types and authentication methods, to aid in security analysis.
 - ## Interoperability: Ensure the JSON structure is compatible with common graph databases and visualization tools to facilitate analysis and reporting.
+
+## TODO 
+PIVOT MAP

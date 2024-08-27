@@ -1,1 +1,0 @@
-2024-08-13T22:21:44z0700	[34mINFO[0m	initializers/connectToDb.go:21	Error opening db: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub

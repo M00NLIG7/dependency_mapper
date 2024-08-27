@@ -7,6 +7,7 @@ toolchain go1.22.5
 require (
 	github.com/a-h/templ v0.2.747
 	github.com/gin-gonic/gin v1.9.1
+	github.com/neo4j/neo4j-go-driver/v5 v5.23.1
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 	gorm.io/driver/sqlite v1.5.5

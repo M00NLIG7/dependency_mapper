@@ -1,149 +1,173 @@
+// models/models.go
+
 package models
 
 import (
-	"gorm.io/gorm"
-    "encoding/json"
-    "database/sql/driver"
-
+    "context"
     "fmt"
-    "errors"
+    "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 type OS string
 
 const (
-	Linux   OS = "Linux"
-	Windows OS = "Windows"
-	Mac     OS = "Mac"
-	Unknown OS = "Unknown"
+    Linux   OS = "Linux"
+    Windows OS = "Windows"
+    Mac     OS = "Mac"
+    Unknown OS = "Unknown"
 )
 
-// Implement the UnmarshalJSON method for OS
-func (os *OS) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-
-	switch s {
-	case string(Linux), string(Windows), string(Mac):
-		*os = OS(s)
-	default:
-		*os = Unknown // or return an error if you want to reject unknown OS types
-	}
-	return nil
-}
-
-// Implement the Scan and Value methods for database interaction
-func (os *OS) Scan(value interface{}) error {
-	if v, ok := value.(string); ok {
-		*os = OS(v)
-		return nil
-	}
-	return errors.New("failed to scan OS")
-}
-
-func (os OS) Value() (driver.Value, error) {
-	return string(os), nil
-}
-
-// Maybe add CPE string for node existing service comparison?
-
-// Dependency represents a dependency between two nodes
-type Dependency struct {
-	ID          uint `gorm:"primaryKey"`
-	NodeType    string
-	Module      string
-	LocalPort   int    `gorm:"uniqueIndex:idx_dep"`
-	LocalIp     string `gorm:"uniqueIndex:idx_dep"`
-    LocalOS     OS
-	RemotePort  int    `gorm:"uniqueIndex:idx_dep"`
-	RemoteIp    string `gorm:"uniqueIndex:idx_dep"`
-	Description string
-}
-
 type Node struct {
-	ID    uint   `gorm:"primaryKey"`
-	SrcIP string `gorm:"unique"` // Ensure unique constraint on src_ip
-	OS    OS `gorm:"type:varchar(10)"`
+    IP   string `json:"ip"`
+    OS   string `json:"os"`
+    Type string `json:"type"`
 }
 
-// Edge represents a connection between two nodes
+type Dependency struct {
+    Module      string `json:"module"`
+    LocalIp     string `json:"localIp"`
+    LocalPort   int    `json:"localPort"`
+    RemoteIp    string `json:"remoteIp"`
+    RemotePort  int    `json:"remotePort"`
+    Description string `json:"description"`
+    LocalOS     OS     `json:"localOS"`
+}
+
 type Edge struct {
-	ID        uint   `gorm:"primaryKey"`
-	SourceID  uint   `gorm:"index"`
-	Source    Node   `gorm:"foreignKey:SourceID"`
-	TargetID  uint   `gorm:"index"`
-	Target    Node   `gorm:"foreignKey:TargetID"`
+    SourceIP string `json:"sourceIP"`
+    TargetIP string `json:"targetIP"`
 }
 
-func AddNode(db *gorm.DB, srcIP string, os OS) (*Node, error) {
-	var node Node
+func AddNode(ctx context.Context, driver neo4j.DriverWithContext, node Node) (Node, error) {
+    query := `
+    MERGE (n:Node {ip: $ip})
+    ON CREATE SET n.os = $os, n.type = $type
+    ON MATCH SET 
+        n.type = $type,
+        n.os = CASE 
+            WHEN n.os = 'Unknown' AND $os <> 'Unknown' THEN $os
+            WHEN n.os IS NULL THEN $os
+            ELSE n.os 
+        END
+    RETURN n.ip AS ip, n.os AS os, n.type AS type
+    `
 
-	// Check if the node already exists
-	if err := db.Where("src_ip = ?", srcIP).First(&node).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Node doesn't exist, create a new one
-			node = Node{SrcIP: srcIP, OS: os}
-			if err := db.Create(&node).Error; err != nil {
-				return nil, fmt.Errorf("failed to create node: %w", err)
-			}
-		} else {
-			// Another error occurred
-			return nil, fmt.Errorf("failed to query node: %w", err)
-		}
-	} else {
-		// Node exists, update it if necessary
-		if node.OS == os {
-            return &node, nil
-		}
+    result, err := neo4j.ExecuteQuery(ctx, driver, query,
+        map[string]interface{}{
+            "ip":   node.IP,
+            "os":   node.OS,
+            "type": node.Type,
+        },
+        neo4j.EagerResultTransformer,
+        neo4j.ExecuteQueryWithDatabase("neo4j"))
 
-        node.OS = os
-        if err := db.Save(&node).Error; err != nil {
-            return nil, fmt.Errorf("failed to update node: %w", err)
-        }
-	}
-
-	// Return the existing or newly created node
-	return &node, nil
-}
-
-func AddEdge(db *gorm.DB, sourceID uint, targetIP string) (*Edge, error) {
-	var targetNode Node
-	if err := db.Where("src_ip = ?", targetIP).First(&targetNode).Error; err != nil {
-		return nil, fmt.Errorf("failed to find target node: %w", err)
-	}
-
-	// Check if the edge already exists
-	var edge Edge
-	if err := db.Where("source_id = ? AND target_id = ?", sourceID, targetNode.ID).First(&edge).Error; err == nil {
-		// Edge already exists, return it
-		return &edge, nil
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		// Another error occurred
-		return nil, fmt.Errorf("failed to check existing edge: %w", err)
-	}
-
-	// Edge doesn't exist, create it
-	edge = Edge{SourceID: sourceID, TargetID: targetNode.ID}
-	if err := db.Create(&edge).Error; err != nil {
-		return nil, fmt.Errorf("failed to create edge: %w", err)
-	}
-
-	return &edge, nil
-}
-
-func AddDependency(db *gorm.DB, dep *Dependency) (*Dependency, error) {
-    // Check if the dependency already exists
-    if err := db.Where("local_ip = ? AND remote_ip = ? AND module = ?", dep.LocalIp, dep.RemoteIp, dep.Module).First(dep).Error; err == nil {
-        return dep, nil
+    if err != nil {
+        return Node{}, err
     }
 
-    // If the dependency does not exist, create a new one
-    if err := db.Create(dep).Error; err != nil {
-        return nil, fmt.Errorf("failed to create dependency: %w", err)
+    if len(result.Records) == 0 {
+        return Node{}, fmt.Errorf("no node created or updated")
     }
 
-    return dep, nil
+    record := result.Records[0]
+    ip, _ := record.Get("ip")
+    os, _ := record.Get("os")
+    nodeType, _ := record.Get("type")
+
+    return Node{
+        IP:   ip.(string),
+        OS:   os.(string),
+        Type: nodeType.(string),
+    }, nil
+}
+
+func AddDependency(ctx context.Context, driver neo4j.DriverWithContext, dep Dependency) error {
+    query := `
+    MATCH (source:Node {ip: $localIp})-[r:DEPENDS_ON]->(target:Node {ip: $remoteIp})
+    SET r.module = $module,
+        r.localPort = $localPort,
+        r.remotePort = $remotePort,
+        r.description = $description
+    RETURN r
+    `
+
+    _, err := neo4j.ExecuteQuery(ctx, driver, query,
+        map[string]interface{}{
+            "localIp":     dep.LocalIp,
+            "remoteIp":    dep.RemoteIp,
+            "module":      dep.Module,
+            "localPort":   dep.LocalPort,
+            "remotePort":  dep.RemotePort,
+            "description": dep.Description,
+        },
+        neo4j.EagerResultTransformer,
+        neo4j.ExecuteQueryWithDatabase("neo4j"))
+
+    return err
+}
+
+func GetAllNodes(ctx context.Context, driver neo4j.DriverWithContext) ([]Node, error) {
+    query := "MATCH (n:Node) RETURN n.ip AS ip, n.os AS os, n.type AS type"
+    result, err := neo4j.ExecuteQuery(ctx, driver, query, nil, neo4j.EagerResultTransformer, neo4j.ExecuteQueryWithDatabase("neo4j"))
+    if err != nil {
+        return nil, err
+    }
+
+    var nodes []Node
+    for _, record := range result.Records {
+        ip, _ := record.Get("ip")
+        os, _ := record.Get("os")
+        nodeType, _ := record.Get("type")
+        nodes = append(nodes, Node{
+            IP:   ip.(string),
+            OS:   os.(string),
+            Type: nodeType.(string),
+        })
+    }
+    return nodes, nil
+}
+
+func GetAllEdges(ctx context.Context, driver neo4j.DriverWithContext) ([]Edge, error) {
+    query := `
+    MATCH (source:Node)-[:DEPENDS_ON]->(target:Node)
+    RETURN source.ip AS sourceIP, target.ip AS targetIP
+    `
+
+    result, err := neo4j.ExecuteQuery(ctx, driver, query, nil, neo4j.EagerResultTransformer, neo4j.ExecuteQueryWithDatabase("neo4j"))
+    if err != nil {
+        return nil, err
+    }
+
+    var edges []Edge
+    for _, record := range result.Records {
+        sourceIP, _ := record.Get("sourceIP")
+        targetIP, _ := record.Get("targetIP")
+
+        edges = append(edges, Edge{
+            SourceIP: sourceIP.(string),
+            TargetIP: targetIP.(string),
+        })
+    }
+
+    return edges, nil
+}
+
+func AddEdge(ctx context.Context, driver neo4j.DriverWithContext, sourceIP, targetIP string) error {
+    query := `
+    MATCH (source:Node {ip: $sourceIP})
+    MATCH (target:Node {ip: $targetIP})
+    MERGE (source)-[r:DEPENDS_ON]->(target)
+    RETURN r
+    `
+
+    _, err := neo4j.ExecuteQuery(ctx, driver, query,
+        map[string]interface{}{
+            "sourceIP": sourceIP,
+            "targetIP": targetIP,
+        },
+        neo4j.EagerResultTransformer,
+        neo4j.ExecuteQueryWithDatabase("neo4j"))
+
+    return err
 }
 
