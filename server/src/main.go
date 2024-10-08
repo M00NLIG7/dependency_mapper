@@ -44,8 +44,10 @@ func main() {
         c.HTML(http.StatusOK, "map", gin.H{})
     })
 
+    /*
     router.POST("/addnode", controllers.HandleDependency)
     router.POST("/api/dependency", controllers.HandleDependency)
+    */
     router.POST("/api/dependencies", controllers.HandleDependencies)
 
     router.GET("/node/:id", func(c *gin.Context) {
@@ -94,7 +96,9 @@ func main() {
     })
 
     router.GET("/api/graph-data", controllers.GetNetworkGraph)
+    /*
     router.POST("/api/node", controllers.CreateOrUpdateNode)
+    */
 
     router.Run()
 }

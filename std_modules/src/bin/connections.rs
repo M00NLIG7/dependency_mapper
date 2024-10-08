@@ -141,8 +141,7 @@ where
                 if let (Some((local_ip, local_port)), Some((remote_ip, remote_port))) = 
                     (parse_address(&entry.local_address()), parse_address(&entry.remote_address())) {
                     if omit_local_connections {
-                        if local_ip.contains("127.0.0.") || remote_ip.contains("127.0.0.") || local_ip.contains("::1") || remote_ip.contains("::1") {
-                            eprintln!("Omitting local connection: {}:{} -> {}:{}", local_ip, local_port, remote_ip, remote_port);
+                        if local_ip.contains("127.0.0.") || remote_ip.contains("127.0.0.") || remote_ip.eq("::") || remote_ip.eq("::1") || remote_ip.eq("0.0.0.0") {
                             continue;
                         }
                     }

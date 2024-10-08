@@ -116,7 +116,10 @@ fn windows_detach(config_path: &PathBuf) -> agent::Result<()> {
 
 async fn run_engine(config_path: &PathBuf, detach_mode: bool) -> agent::Result<()> {
     let config_str = std::fs::read_to_string(config_path)?;
+    println!("Config file loaded: {}", config_path.display());
     let config: Config = serde_yaml::from_str(&config_str)?;
+
+    println!("Starting agent with config: {:?}", config);
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
     let mut engine = CollectionEngine::new(config);

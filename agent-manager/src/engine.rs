@@ -1,15 +1,28 @@
 use crate::config::{Config, ModuleConfig};
 use crate::Error;
 use crate::Result;
-use tempfile::NamedTempFile;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::io::Write;
 use std::time::Instant;
+use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
 use tokio::time;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all(serialize = "PascalCase", deserialize = "snake_case"))]
+pub struct Dependency {
+    pub local_ip: String,
+    pub local_os: String,
+    pub remote_ip: String,
+    pub local_port: u16,
+    pub remote_port: u16,
+    pub module: String,
+    pub description: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct CollectionEngine {
@@ -32,6 +45,7 @@ impl CollectionEngine {
     }
 
     pub async fn run(&mut self, mut shutdown_rx: mpsc::Receiver<()>) -> Result<()> {
+        println!("Starting engine...");
         loop {
             tokio::select! {
                 _ = shutdown_rx.recv() => {
@@ -84,6 +98,7 @@ impl CollectionEngine {
         let temp_file = if let Some(args) = &module.args {
             let mut file = NamedTempFile::new()?;
             let args_json = serde_json::to_string(args)?;
+            println!("Writing args to file: {}", args_json);
             file.write_all(args_json.as_bytes())?;
             Some(file)
         } else {
@@ -109,17 +124,26 @@ impl CollectionEngine {
         }
 
         let result: Value = serde_json::from_slice(&output.stdout)?;
+        let data: Vec<Dependency> = match result.get("dependencies") {
+            Some(Value::Array(arr)) => serde_json::from_value(Value::Array(arr.to_vec()))
+                .unwrap_or_else(|e| {
+                    eprintln!("Error deserializing dependencies: {:?}", e);
+                    Vec::new()
+                }),
+            _ => {
+                eprintln!("'dependencies' field is missing or not an array");
+                Vec::new()
+            }
+        };
 
         // Send result to server
-        self.send_to_server(&result).await?;
+        self.send_to_server(&data).await?;
 
         Ok(())
     }
 
-    async fn send_to_server(&self, data: &Value) -> Result<()> {
+    async fn send_to_server(&self, data: &Vec<Dependency>) -> Result<()> {
         let client = reqwest::Client::new();
-
-        dbg!(data);
 
         let response = client
             .post(&self.config.server.url)

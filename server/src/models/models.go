@@ -1,5 +1,3 @@
-// models/models.go
-
 package models
 
 import (
@@ -18,29 +16,38 @@ const (
 )
 
 type Node struct {
-    IP   string `json:"ip"`
+    ID   string `json:"id"`
     OS   string `json:"os"`
     Type string `json:"type"`
 }
 
-type Dependency struct {
-    Module      string `json:"module"`
-    LocalIp     string `json:"localIp"`
-    LocalPort   int    `json:"localPort"`
-    RemoteIp    string `json:"remoteIp"`
-    RemotePort  int    `json:"remotePort"`
+type Connection struct {
+    ID          string `json:"id"`
+    Protocol    string `json:"protocol"`
+    SourcePort  int    `json:"sourcePort"`
+    TargetPort  int    `json:"targetPort"`
     Description string `json:"description"`
-    LocalOS     OS     `json:"localOS"`
 }
 
 type Edge struct {
-    SourceIP string `json:"sourceIP"`
-    TargetIP string `json:"targetIP"`
+    SourceID     string `json:"source"`
+    ConnectionID string `json:"connection"`
+    TargetID     string `json:"target"`
+}
+
+type Dependency struct {
+    LocalIp     string `json:"localIp"`
+    LocalOS     OS     `json:"localOS"`
+    RemoteIp    string `json:"remoteIp"`
+    Module      string `json:"module"`
+    LocalPort   int    `json:"localPort"`
+    RemotePort  int    `json:"remotePort"`
+    Description string `json:"description"`
 }
 
 func AddNode(ctx context.Context, driver neo4j.DriverWithContext, node Node) (Node, error) {
     query := `
-    MERGE (n:Node {ip: $ip})
+    MERGE (n:Node {id: $id})
     ON CREATE SET n.os = $os, n.type = $type
     ON MATCH SET 
         n.type = $type,
@@ -49,12 +56,12 @@ func AddNode(ctx context.Context, driver neo4j.DriverWithContext, node Node) (No
             WHEN n.os IS NULL THEN $os
             ELSE n.os 
         END
-    RETURN n.ip AS ip, n.os AS os, n.type AS type
+    RETURN n.id AS id, n.os AS os, n.type AS type
     `
 
     result, err := neo4j.ExecuteQuery(ctx, driver, query,
         map[string]interface{}{
-            "ip":   node.IP,
+            "id":   node.ID,
             "os":   node.OS,
             "type": node.Type,
         },
@@ -70,35 +77,73 @@ func AddNode(ctx context.Context, driver neo4j.DriverWithContext, node Node) (No
     }
 
     record := result.Records[0]
-    ip, _ := record.Get("ip")
+    id, _ := record.Get("id")
     os, _ := record.Get("os")
     nodeType, _ := record.Get("type")
 
     return Node{
-        IP:   ip.(string),
+        ID:   id.(string),
         OS:   os.(string),
         Type: nodeType.(string),
     }, nil
 }
 
-func AddDependency(ctx context.Context, driver neo4j.DriverWithContext, dep Dependency) error {
+func AddConnection(ctx context.Context, driver neo4j.DriverWithContext, conn Connection) (Connection, error) {
     query := `
-    MATCH (source:Node {ip: $localIp})-[r:DEPENDS_ON]->(target:Node {ip: $remoteIp})
-    SET r.module = $module,
-        r.localPort = $localPort,
-        r.remotePort = $remotePort,
-        r.description = $description
-    RETURN r
+    MERGE (c:Connection {id: $id})
+    ON CREATE SET c.protocol = $protocol, c.sourcePort = $sourcePort, c.targetPort = $targetPort, c.description = $description
+    ON MATCH SET c.protocol = $protocol, c.sourcePort = $sourcePort, c.targetPort = $targetPort, c.description = $description
+    RETURN c.id AS id, c.protocol AS protocol, c.sourcePort AS sourcePort, c.targetPort AS targetPort, c.description AS description
+    `
+
+    result, err := neo4j.ExecuteQuery(ctx, driver, query,
+        map[string]interface{}{
+            "id":          conn.ID,
+            "protocol":    conn.Protocol,
+            "sourcePort":  conn.SourcePort,
+            "targetPort":  conn.TargetPort,
+            "description": conn.Description,
+        },
+        neo4j.EagerResultTransformer,
+        neo4j.ExecuteQueryWithDatabase("neo4j"))
+
+    if err != nil {
+        return Connection{}, err
+    }
+
+    if len(result.Records) == 0 {
+        return Connection{}, fmt.Errorf("no connection created or updated")
+    }
+
+    record := result.Records[0]
+    id, _ := record.Get("id")
+    protocol, _ := record.Get("protocol")
+    sourcePort, _ := record.Get("sourcePort")
+    targetPort, _ := record.Get("targetPort")
+    description, _ := record.Get("description")
+
+    return Connection{
+        ID:          id.(string),
+        Protocol:    protocol.(string),
+        SourcePort:  int(sourcePort.(int64)),
+        TargetPort:  int(targetPort.(int64)),
+        Description: description.(string),
+    }, nil
+}
+
+func AddRelationships(ctx context.Context, driver neo4j.DriverWithContext, sourceID, targetID, connectionID string) error {
+    query := `
+    MATCH (source:Node {id: $sourceID})
+    MATCH (target:Node {id: $targetID})
+    MATCH (conn:Connection {id: $connectionID})
+    MERGE (source)-[:CONNECTS_TO]->(conn)-[:CONNECTS_TO]->(target)
     `
 
     _, err := neo4j.ExecuteQuery(ctx, driver, query,
         map[string]interface{}{
-            "localIp":     dep.LocalIp,
-            "remoteIp":    dep.RemoteIp,
-            "module":      dep.Module,
-            "localPort":   dep.LocalPort,
-            "remotePort":  dep.RemotePort,
-            "description": dep.Description,
+            "sourceID":     sourceID,
+            "targetID":     targetID,
+            "connectionID": connectionID,
         },
         neo4j.EagerResultTransformer,
         neo4j.ExecuteQueryWithDatabase("neo4j"))
@@ -107,7 +152,7 @@ func AddDependency(ctx context.Context, driver neo4j.DriverWithContext, dep Depe
 }
 
 func GetAllNodes(ctx context.Context, driver neo4j.DriverWithContext) ([]Node, error) {
-    query := "MATCH (n:Node) RETURN n.ip AS ip, n.os AS os, n.type AS type"
+    query := "MATCH (n:Node) RETURN n.id AS id, n.os AS os, n.type AS type"
     result, err := neo4j.ExecuteQuery(ctx, driver, query, nil, neo4j.EagerResultTransformer, neo4j.ExecuteQueryWithDatabase("neo4j"))
     if err != nil {
         return nil, err
@@ -115,11 +160,11 @@ func GetAllNodes(ctx context.Context, driver neo4j.DriverWithContext) ([]Node, e
 
     var nodes []Node
     for _, record := range result.Records {
-        ip, _ := record.Get("ip")
+        id, _ := record.Get("id")
         os, _ := record.Get("os")
         nodeType, _ := record.Get("type")
         nodes = append(nodes, Node{
-            IP:   ip.(string),
+            ID:   id.(string),
             OS:   os.(string),
             Type: nodeType.(string),
         })
@@ -127,12 +172,39 @@ func GetAllNodes(ctx context.Context, driver neo4j.DriverWithContext) ([]Node, e
     return nodes, nil
 }
 
+func GetAllConnections(ctx context.Context, driver neo4j.DriverWithContext) ([]Connection, error) {
+    query := `
+    MATCH (c:Connection)
+    RETURN c.id AS id, c.protocol AS protocol, c.sourcePort AS sourcePort, c.targetPort AS targetPort, c.description AS description
+    `
+    result, err := neo4j.ExecuteQuery(ctx, driver, query, nil, neo4j.EagerResultTransformer, neo4j.ExecuteQueryWithDatabase("neo4j"))
+    if err != nil {
+        return nil, err
+    }
+
+    var connections []Connection
+    for _, record := range result.Records {
+        id, _ := record.Get("id")
+        protocol, _ := record.Get("protocol")
+        sourcePort, _ := record.Get("sourcePort")
+        targetPort, _ := record.Get("targetPort")
+        description, _ := record.Get("description")
+        connections = append(connections, Connection{
+            ID:          id.(string),
+            Protocol:    protocol.(string),
+            SourcePort:  int(sourcePort.(int64)),
+            TargetPort:  int(targetPort.(int64)),
+            Description: description.(string),
+        })
+    }
+    return connections, nil
+}
+
 func GetAllEdges(ctx context.Context, driver neo4j.DriverWithContext) ([]Edge, error) {
     query := `
-    MATCH (source:Node)-[:DEPENDS_ON]->(target:Node)
-    RETURN source.ip AS sourceIP, target.ip AS targetIP
+    MATCH (source:Node)-[:CONNECTS_TO]->(conn:Connection)-[:CONNECTS_TO]->(target:Node)
+    RETURN source.id AS sourceId, conn.id AS connectionId, target.id AS targetId
     `
-
     result, err := neo4j.ExecuteQuery(ctx, driver, query, nil, neo4j.EagerResultTransformer, neo4j.ExecuteQueryWithDatabase("neo4j"))
     if err != nil {
         return nil, err
@@ -140,34 +212,14 @@ func GetAllEdges(ctx context.Context, driver neo4j.DriverWithContext) ([]Edge, e
 
     var edges []Edge
     for _, record := range result.Records {
-        sourceIP, _ := record.Get("sourceIP")
-        targetIP, _ := record.Get("targetIP")
-
+        sourceId, _ := record.Get("sourceId")
+        connectionId, _ := record.Get("connectionId")
+        targetId, _ := record.Get("targetId")
         edges = append(edges, Edge{
-            SourceIP: sourceIP.(string),
-            TargetIP: targetIP.(string),
+            SourceID:     sourceId.(string),
+            ConnectionID: connectionId.(string),
+            TargetID:     targetId.(string),
         })
     }
-
     return edges, nil
 }
-
-func AddEdge(ctx context.Context, driver neo4j.DriverWithContext, sourceIP, targetIP string) error {
-    query := `
-    MATCH (source:Node {ip: $sourceIP})
-    MATCH (target:Node {ip: $targetIP})
-    MERGE (source)-[r:DEPENDS_ON]->(target)
-    RETURN r
-    `
-
-    _, err := neo4j.ExecuteQuery(ctx, driver, query,
-        map[string]interface{}{
-            "sourceIP": sourceIP,
-            "targetIP": targetIP,
-        },
-        neo4j.EagerResultTransformer,
-        neo4j.ExecuteQueryWithDatabase("neo4j"))
-
-    return err
-}
-

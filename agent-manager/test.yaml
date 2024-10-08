@@ -1,8 +1,7 @@
 ---
 server:
-  url: "http://localhost:8000/api/v1/collect"
+  url: "http://localhost:8080/api/dependencies"
   timeout: 30
-
 agent:
   default_interval: 300  # 5 minutes in seconds
   module_paths:
@@ -14,7 +13,7 @@ agent:
 modules:
   std.modules.connection:
     description: "Description of module1"
-    interval: 60  # Run every 60 seconds
+    interval: 30 # Run every 60 seconds
     args:
       omit_local_connections: true
       #  module2:
