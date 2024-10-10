@@ -1,8 +1,7 @@
 package initializers
 
 import (
-	"depedency-mapper-server/models"
-
+	"dependency-mapper/internal/models"
 )
 
 func SyncDatabase() {

@@ -1,0 +1,34 @@
+// components/server.go
+
+package components
+
+templ ServerOverview() {
+    @Card("Overview") {
+        @SpecsGrid()
+        @Separator()
+        @LabelValuePair("Uptime", "June 1, 2023 - 12:00 PM")
+        @LabelValuePair("IP Address", "192.168.1.100")
+        @LabelValuePair("Location", "New York, USA")
+    }
+}
+
+templ SpecsGrid() {
+    <div class="grid grid-cols-2 gap-4">
+        @LabelValuePair("CPU", "Intel Core i7-10700K")
+        @LabelValuePair("RAM", "32GB DDR4")
+        @LabelValuePair("Storage", "1TB SSD")
+        @LabelValuePair("OS", "Ubuntu 22.04 LTS")
+    </div>
+}
+
+templ ServerDetails() {
+    @Card("Server Details") {
+        @LabelValuePair("Hostname", "app-server-01")
+        @LabelValuePair("Environment", "Production")
+        @LabelValuePair("Region", "us-east-1")
+        @LabelValuePair("Provider", "AWS")
+        @LabelValuePair("Instance Type", "t3.xlarge")
+        @LabelValuePair("Provisioned IOPS", "5000")
+    }
+}
+

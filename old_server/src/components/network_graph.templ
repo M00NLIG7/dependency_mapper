@@ -1,0 +1,303 @@
+package components
+
+templ NetworkGraph() {
+    <div class="relative h-screen">
+        <!-- Hamburger Menu Button -->
+        <button id="menuToggle" class="fixed top-4 left-4 z-50 p-2 bg-white rounded-md shadow-md">
+            <i class="fas fa-bars text-gray-800"></i>
+        </button>
+
+        <!-- Zoom Controls -->
+        <div class="fixed top-4 right-4 z-50 flex space-x-2">
+            <button id="zoomIn" class="p-2 bg-white rounded-md shadow-md">
+                <i class="fas fa-plus text-gray-800"></i>
+            </button>
+            <button id="zoomOut" class="p-2 bg-white rounded-md shadow-md">
+                <i class="fas fa-minus text-gray-800"></i>
+            </button>
+        </div>
+
+        <!-- Sidebar -->
+        <div id="sidebar" class="fixed top-0 left-0 w-64 h-full bg-white shadow-lg transform -translate-x-full transition-transform duration-300 ease-in-out z-40">
+            <div class="p-4 mt-16">
+                <h2 class="text-xl font-bold mb-4">Filters</h2>
+                
+                <!-- Filter Options -->
+                <div class="mb-4">
+                    <h3 class="font-semibold mb-2">Node Types</h3>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="form-checkbox" value="type1">
+                            <span class="ml-2">Type 1</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="form-checkbox" value="type2">
+                            <span class="ml-2">Type 2</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="form-checkbox" value="type3">
+                            <span class="ml-2">Type 3</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Regex Filter -->
+                <div class="mb-4">
+                    <h3 class="font-semibold mb-2">Regex Filter</h3>
+                    <input type="text" id="regexFilter" class="w-full px-2 py-1 border rounded" placeholder="Enter regex...">
+                </div>
+                
+                <!-- Apply Filters Button -->
+                <button id="applyFilters" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Graph Container -->
+        <div id="graph" class="w-full h-full"></div>
+    </div>
+
+    <script src="/static/js/tailwind-3.4.5.js"></script>
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/js/all.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @TailwindConfig()
+    <style>
+        @import "/static/css/globals.css";
+
+        .link { stroke-opacity: 0.6; }
+        .node text { font-size: 10px; }
+        .node circle { stroke: #fff; stroke-width: 2px; }
+        .connection-node { fill: #ffd700; stroke: #ff8c00; stroke-width: 2px; }
+    </style>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script>
+        var nodes = [];
+        var connections = [];
+        var links = [];
+
+        var icons = {
+            "Linux": "/static/assets/Linux.svg",
+            "Windows": "/static/assets/Windows.svg",
+            "Unknown": "/static/assets/Unknown.svg",
+        };
+
+        function getNodeIcon(node) {
+            return icons[node.os] || icons["Unknown"];
+        }
+
+        var svg = d3.select('#graph').append('svg');
+        var g = svg.append("g");
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+
+        var zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
+
+        svg.call(zoom);
+
+        var linkGroup = g.append('g').attr('class', 'links');
+        var nodeGroup = g.append('g').attr('class', 'nodes');
+        var connectionGroup = g.append('g').attr('class', 'connections');
+        var textGroup = g.append('g').attr('class', 'texts');
+
+        var simulation = d3.forceSimulation()
+            .force('link', d3.forceLink().id(d => d.id).distance(150))
+            .force('charge', d3.forceManyBody().strength(-800))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(60));
+
+        function handleResize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            svg.attr('width', width).attr('height', height);
+            simulation.force('center', d3.forceCenter(width / 2, height / 2));
+            simulation.alpha(1).restart();
+        }
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+
+        var dragDrop = d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended);
+
+        function updateGraph() {
+            var link = linkGroup.selectAll('.link')
+                .data(links)
+                .join('line')
+                .attr('class', 'link')
+                .attr('stroke', '#4A4A4A')
+                .attr('stroke-width', 2)
+                .attr('marker-end', 'url(#arrowhead)');
+
+            var node = nodeGroup.selectAll('.node')
+                .data(nodes)
+                .join('g')
+                .attr('class', 'node')
+                .call(dragDrop);
+
+            node.selectAll('image')
+                .data(d => [d])
+                .join('image')
+                .attr('xlink:href', getNodeIcon)
+                .attr('width', 32)
+                .attr('height', 32)
+                .attr('x', -16)
+                .attr('y', -16);
+
+            node.selectAll('text')
+                .data(d => [d])
+                .join('text')
+                .text(d => d.id)
+                .attr('font-size', 10)
+                .attr('dx', 20)
+                .attr('dy', 4);
+
+            var connection = connectionGroup.selectAll('.connection')
+                .data(connections)
+                .join('g')
+                .attr('class', 'connection')
+                .call(dragDrop);
+
+            connection.selectAll('circle')
+                .data(d => [d])
+                .join('circle')
+                .attr('r', 15)
+                .attr('class', 'connection-node');
+
+            connection.selectAll('text')
+                .data(d => [d])
+                .join('text')
+                .text(d => d.protocol)
+                .attr('font-size', 8)
+                .attr('text-anchor', 'middle')
+                .attr('dy', -20);
+
+            connection.selectAll('.port-text')
+                .data(d => [d])
+                .join('text')
+                .attr('class', 'port-text')
+                .text(d => `${d.sourcePort}->${d.targetPort}`)
+                .attr('font-size', 8)
+                .attr('text-anchor', 'middle')
+                .attr('dy', 20);
+
+            simulation.nodes(nodes.concat(connections)).on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => {
+                        const dx = d.target.x - d.source.x;
+                        const dy = d.target.y - d.source.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const targetRadius = d.target.protocol ? 15 : 16;
+                        return d.target.x - (dx * (targetRadius + 10) / distance);
+                    })
+                    .attr('y2', d => {
+                        const dx = d.target.x - d.source.x;
+                        const dy = d.target.y - d.source.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const targetRadius = d.target.protocol ? 15 : 16;
+                        return d.target.y - (dy * (targetRadius + 10) / distance);
+                    });
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+                connection.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            simulation.force('link').links(links);
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        fetch('/api/graph-data')
+            .then(response => response.json())
+            .then(data => {
+                nodes = data.nodes.map(node => ({
+                    id: node.id,
+                    os: node.os,
+                    type: node.type
+                }));
+
+                connections = data.connections.map(conn => ({
+                    id: conn.id,
+                    protocol: conn.protocol,
+                    sourcePort: conn.sourcePort,
+                    targetPort: conn.targetPort,
+                    description: conn.description
+                }));
+
+                links = data.edges.map(edge => ({
+                    source: edge.source,
+                    target: edge.connection,
+                })).concat(data.edges.map(edge => ({
+                    source: edge.connection,
+                    target: edge.target,
+                })));
+
+                updateGraph();
+                simulation.alpha(1).restart();
+            });
+
+        // Toggle sidebar
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+        });
+
+        // Zoom controls
+        document.getElementById('zoomIn').addEventListener('click', () => {
+            svg.transition().call(zoom.scaleBy, 1.2);
+        });
+
+        document.getElementById('zoomOut').addEventListener('click', () => {
+            svg.transition().call(zoom.scaleBy, 0.8);
+        });
+
+        // Apply filters
+        document.getElementById('applyFilters').addEventListener('click', () => {
+            const selectedTypes = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            const regexFilter = document.getElementById('regexFilter').value;
+
+            let filteredNodes = nodes;
+            
+            if (selectedTypes.length > 0) {
+                filteredNodes = filteredNodes.filter(node => selectedTypes.includes(node.type));
+            }
+
+            if (regexFilter) {
+                const regex = new RegExp(regexFilter);
+                filteredNodes = filteredNodes.filter(node => regex.test(node.id));
+            }
+
+            const filteredLinks = links.filter(link => 
+                filteredNodes.some(node => node.id === link.source.id || node.id === link.source) &&
+                filteredNodes.some(node => node.id === link.target.id || node.id === link.target)
+            );
+
+            updateGraph(filteredNodes, filteredLinks);
+        });
+    </script>
+}
