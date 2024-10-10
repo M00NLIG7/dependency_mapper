@@ -1,144 +1,127 @@
-# Overview
+# Network Dependency Mapping and Visualization
+
+## Overview
 
 This project aims to map and visualize network dependencies, focusing on how different machines (nodes) interact and depend on each other through specific connections (edges), like LDAP. By identifying and detailing these dependencies, the project facilitates a comprehensive understanding of the network's structure and operational dynamics.
 
-# Data Structures
+## Data Structures
 
-To represent the network and its dependencies, the following JSON structures are proposed:
+### Node Structure
 
-# Node Structure
+Nodes represent machines or dependencies in the network. They are defined using the following Go struct:
 
-Each machine in the network is represented as a node with associated attributes. The node structure includes details such as the machine's identifier, type, and any relevant properties.
-
-```json
-
-// Server
-{
-  "id": "machine1",
-  "type": "server",
-  "properties": {
-    "ip_address": "192.168.1.1",
-    "hostname": "bingus.local",
-    "os": "Linux",
-    "dependencies": ["LDAP", "HTTP"]
-  }
-}
-
-// Dependency
-{
-    "id": "LDAP_1",
-    "parent": "machine1",
-    "type": "LDAP",
-    "properties": {
-       "dependants": ["192.168.1.2"],
-    }
+```go
+type Node struct {
+    ID   string `json:"id"`
+    OS   string `json:"os"`
+    Type string `json:"type"`
 }
 ```
 
-# Edge Structure
+### Connection Structure
 
-Dependencies between machines are represented as edges, indicating the direction and nature of the dependency. Each edge specifies the source and target nodes, along with the dependency type and any additional information.
+Connections represent the links between nodes, defined as:
 
-```json
-{
-  "source": "machine1",
-  "target": "machine2",
-  "type": "LDAP",
-  "properties": {
-    "port": 389,
-    "encryption": "SSL",
-    "status": "active"
-  }
+```go
+type Connection struct {
+    ID          string `json:"id"`
+    Protocol    string `json:"protocol"`
+    SourcePort  int    `json:"sourcePort"`
+    TargetPort  int    `json:"targetPort"`
+    Description string `json:"description"`
 }
 ```
 
-# Graph Structure
+### Edge Structure
 
-The graph structure encapsulates the entire network, comprising a collection of nodes and edges. This structure enables a holistic view of the network dependencies.
+Edges represent the relationships between nodes and connections:
 
-```json
-{
-  "nodes": [
-    {
-      /* Node 1 JSON */
-    },
-    {
-      /* Node 2 JSON */
-    }
-    // Additional nodes
-  ],
-  "edges": [
-    {
-      /* Edge 1 JSON */
-    },
-    {
-      /* Edge 2 JSON */
-    }
-    // Additional edges
-  ]
+```go
+type Edge struct {
+    SourceID     string `json:"source"`
+    ConnectionID string `json:"connection"`
+    TargetID     string `json:"target"`
 }
 ```
 
-# Program Architecture
+### Dependency Structure
 
-Local Machine
+Dependencies provide additional details about the connections between nodes:
+
+```go
+type Dependency struct {
+    LocalIp     string `json:"localIp"`
+    LocalOS     OS     `json:"localOS"`
+    RemoteIp    string `json:"remoteIp"`
+    Module      string `json:"module"`
+    LocalPort   int    `json:"localPort"`
+    RemotePort  int    `json:"remotePort"`
+    Description string `json:"description"`
+}
 ```
-+-----------------------------------+
-|   +-----------------------------+ |
-|   |    Rust Agent Manager       | |
-|   |  +-----------------------+  | |
-|   |  | Agent Configurations  |  | |
-|   |  | (YAML)                |  | |
-|   |  +-----------------------+  | |
-|   |           |                 | |
-|   |  +--------v--------+        | |
-|   |  | Agent Scheduler |        | |
-|   |  +--------+--------+        | |
-|   |           |                 | |
-|   +-----------------------------+ |
-|             |   |   |             |
-|    +--------v-+ | +-v----------+  |
-|    |Python    | | |Go Agent    |  |
-|    |Agent     | | |            |  |
-|    +----------+ | +------------+  |
-|      +----------v----------+      |
-|      |   Node.js Agent     |      |
-|      +---------------------+      |
-+-----------------------------------+
-              |
-              | HTTP/HTTPS
-              v
-+-----------------------------------+
-|        Go Server                  |
-+-----------------------------------+
-```
-Rust Agent Manager:
 
-Reads YAML configurations for all local agents
-Schedules and manages the lifecycle of agents
-Monitors agent health and restarts if necessary
-Handles logging and error reporting
+## Program Architecture
 
+The project follows a distributed architecture:
 
-Agent Configurations (YAML):
+1. **Local Machine**:
+   - Rust Agent Manager
+     - Reads YAML configurations for all local agents
+     - Schedules and manages the lifecycle of agents
+     - Monitors agent health and restarts if necessary
+     - Handles logging and error reporting
+   - Multi-language Agents (Python, Go, Node.js)
+     - Implement specific data collection logic
+     - Post data directly to the central server
 
-Define each agent's properties, schedule, and data collection parameters
+2. **Central Server**:
+   - Go Server
+     - Receives data from agents via HTTP/HTTPS
+     - Manages the Neo4j database for storing network topology
+   - Web Server
+     - Backend: Go REST API
+       - Handles data processing and retrieval from Neo4j
+       - Provides endpoints for the frontend to consume
+     - Frontend: Next.js
+       - Offers a responsive and interactive user interface
+       - Visualizes network dependencies and allows for data exploration
 
+## Database Operations
 
-Multi-language Agents:
+The project uses Neo4j as the backend database. Key operations include:
 
-Implement specific data collection logic
-Post data directly to your existing server
-Can be simple scripts or more complex programs
+- Adding nodes and connections
+- Creating relationships between nodes
+- Retrieving all nodes, connections, and edges
 
-# Data Considerations
+## Data Considerations
 
-- ## Uniqueness: Ensure each node and edge has a unique identifier to avoid ambiguities in the network graph.
-- ## Scalability: Design the JSON structures with scalability in mind, allowing for the addition of new nodes, edges, and properties as the network evolves.
-- ## Flexibility: Allow for the inclusion of various types of dependencies beyond LDAP, such as HTTP, database connections, etc., to provide a comprehensive network map.
-- ## Security: Include security-related properties where relevant, such as encryption types and authentication methods, to aid in security analysis.
-- ## Interoperability: Ensure the JSON structure is compatible with common graph databases and visualization tools to facilitate analysis and reporting.
+- **Uniqueness**: Each node and edge has a unique identifier to avoid ambiguities in the network graph.
+- **Scalability**: The data structures are designed with scalability in mind, allowing for the addition of new nodes, edges, and properties as the network evolves.
+- **Flexibility**: The system allows for various types of dependencies beyond LDAP, such as HTTP, database connections, etc., to provide a comprehensive network map.
+- **Security**: Security-related properties are included where relevant, such as encryption types and authentication methods, to aid in security analysis.
+- **Interoperability**: The data structure is compatible with common graph databases and visualization tools to facilitate analysis and reporting.
 
-## TODO 
-PIVOT MAP
-TIMELINE
+## TODO
+
+- Implement PIVOT MAP functionality
+- Develop TIMELINE feature
+
+## Getting Started
+
+TODO
+
+## Contributing
+
+TODO
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPLv3). This license ensures that the software remains open source and that any modifications or derivative works are also distributed under the same license terms.
+
+Key points of the GPLv3:
+- You are free to use, modify, and distribute this software.
+- If you distribute modified versions, you must make your modifications available under the GPLv3.
+- You must include the original copyright notice and license text with any distribution.
+
+For the full license text, see the [LICENSE](LICENSE) file in the project repository or visit [https://www.gnu.org/licenses/gpl-3.0.en.html](https://www.gnu.org/licenses/gpl-3.0.en.html).
