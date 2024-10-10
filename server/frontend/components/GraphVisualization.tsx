@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import * as d3 from 'd3';
 
 const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
@@ -10,6 +10,18 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
 
     const getNodeIcon = (node) => icons[node.os] || icons.Unknown;
 
+    // Calculate node sizes based on relationships
+    const nodeSizes = useMemo(() => {
+        const sizes = {};
+        graphData.links.forEach(link => {
+            sizes[link.source] = (sizes[link.source] || 0) + 1;
+            sizes[link.target] = (sizes[link.target] || 0) + 1;
+        });
+        return Object.fromEntries(
+            Object.entries(sizes).map(([id, count]) => [id, Math.max(32, Math.min(64, 32 + count * 4))])
+        );
+    }, [graphData.links]);
+
     useEffect(() => {
         if (!graphData.nodes.length) return;
 
@@ -18,6 +30,18 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
         const g = svg.append('g');
         let width = window.innerWidth;
         let height = window.innerHeight;
+
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 8)  // Adjusted to add padding
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#4A4A4A");
 
         zoomRef.current = d3
             .zoom()
@@ -34,10 +58,10 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
 
         const simulation = d3
             .forceSimulation()
-            .force('link', d3.forceLink().id((d) => d.id).distance(150))
-            .force('charge', d3.forceManyBody().strength(-800))
+            .force('link', d3.forceLink().id((d) => d.id).distance(200))
+            .force('charge', d3.forceManyBody().strength(-1000))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(60));
+            .force('collision', d3.forceCollide().radius(d => (nodeSizes[d.id] || 32) / 2 + 20));
 
         const handleResize = () => {
             width = window.innerWidth;
@@ -70,10 +94,11 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
         const link = linkGroup
             .selectAll('.link')
             .data(graphData.links)
-            .join('line')
+            .join('path')
             .attr('class', 'link')
             .attr('stroke', '#4A4A4A')
             .attr('stroke-width', 2)
+            .attr('fill', 'none')
             .attr('marker-end', 'url(#arrowhead)');
 
         const node = nodeGroup
@@ -88,10 +113,10 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
             .data((d) => [d])
             .join('image')
             .attr('xlink:href', getNodeIcon)
-            .attr('width', 32)
-            .attr('height', 32)
-            .attr('x', -16)
-            .attr('y', -16);
+            .attr('width', d => nodeSizes[d.id] || 32)
+            .attr('height', d => nodeSizes[d.id] || 32)
+            .attr('x', d => -(nodeSizes[d.id] || 32) / 2)
+            .attr('y', d => -(nodeSizes[d.id] || 32) / 2);
 
         node
             .selectAll('text')
@@ -99,7 +124,7 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
             .join('text')
             .text((d) => d.id)
             .attr('font-size', 10)
-            .attr('dx', 20)
+            .attr('dx', d => (nodeSizes[d.id] || 32) / 2 + 5)
             .attr('dy', 4);
 
         const connection = connectionGroup
@@ -136,11 +161,31 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
             .attr('dy', 20);
 
         simulation.nodes(graphData.nodes.concat(graphData.connections)).on('tick', () => {
-            link
-                .attr('x1', (d) => d.source.x)
-                .attr('y1', (d) => d.source.y)
-                .attr('x2', (d) => d.target.x)
-                .attr('y2', (d) => d.target.y);
+            link.attr('d', (d) => {
+                const sourceX = d.source.x;
+                const sourceY = d.source.y;
+                const targetX = d.target.x;
+                const targetY = d.target.y;
+
+                const dx = targetX - sourceX;
+                const dy = targetY - sourceY;
+                const length = Math.sqrt(dx * dx + dy * dy);
+
+                if (length === 0) return "M0,0L0,0";
+
+                const unitDx = dx / length;
+                const unitDy = dy / length;
+
+                const sourceSize = (nodeSizes[d.source.id] || 32) / 2;
+                const targetSize = (nodeSizes[d.target.id] || 32) / 2;
+
+                const startX = sourceX + unitDx * (sourceSize + 2);
+                const startY = sourceY + unitDy * (sourceSize + 2);
+                const endX = targetX - unitDx * (targetSize + 6);
+                const endY = targetY - unitDy * (targetSize + 6);
+
+                return `M${startX},${startY}L${endX},${endY}`;
+            });
 
             node.attr('transform', (d) => `translate(${d.x},${d.y})`);
             connection.attr('transform', (d) => `translate(${d.x},${d.y})`);
@@ -151,10 +196,9 @@ const GraphVisualization = ({ svgRef, zoomRef, graphData }) => {
         return () => {
             window.removeEventListener('resize', handleResize);
         };
-    }, [graphData]);
+    }, [graphData, nodeSizes]);
 
     return <svg ref={svgRef} className="w-full h-full"></svg>;
 };
 
 export default GraphVisualization;
-
